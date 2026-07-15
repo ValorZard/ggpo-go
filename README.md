@@ -2,6 +2,10 @@
 # GGPO-Go - GGPO Port Into Go
 GGPO-Go is a port of the GGPO rollback netcode library into Go. Currently unfinished. 
 
+There can be two different types of transports:
+Plain UDP (Native only)
+WebRTC (WASM and Native)
+WebRTC datachannels need a signaling server implementation.
 ## Usage 
 General usage would be best explained by looking at the code in the example folder.
 
