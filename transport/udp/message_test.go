@@ -1,11 +1,11 @@
-package messages_test
+package udp_test
 
 import (
 	"bytes"
 	"fmt"
 	"testing"
 
-	messages "github.com/ikemen-engine/ggpo/internal/messages"
+	messages "github.com/ikemen-engine/ggpo/transport/udp"
 )
 
 func TestEncodeDecodeUDPMessage(t *testing.T) {

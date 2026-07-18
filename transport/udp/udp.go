@@ -1,10 +1,9 @@
-package transport
+package udp
 
 import (
 	"net"
 	"strconv"
 
-	"github.com/ikemen-engine/ggpo/internal/messages"
 	"github.com/ikemen-engine/ggpo/internal/util"
 )
 
@@ -14,7 +13,7 @@ const (
 )
 
 type Udp struct {
-	Stats UdpStats // may not need this, may just be a service used by others
+	Stats Stats // may not need this, may just be a service used by others
 
 	socket         net.Conn
 	messageHandler MessageHandler
@@ -24,7 +23,7 @@ type Udp struct {
 	sendChan       chan sendRequest
 }
 
-type UdpStats struct {
+type Stats struct {
 	BytesSent   int
 	PacketsSent int
 	KbpsSent    float64
@@ -48,7 +47,7 @@ func (u Udp) Close() {
 }
 
 type sendRequest struct {
-	msg        messages.UDPMessage
+	msg        UDPMessage
 	remoteIp   string
 	remotePort int
 }
@@ -81,7 +80,7 @@ func NewUdp(messageHandler MessageHandler, localPort int) Udp {
 // dst should be sockaddr
 // maybe create Gob encoder and decoder members
 // instead of creating them on each message send
-func (u Udp) SendTo(msg messages.UDPMessage, remoteIp string, remotePort int) {
+func (u Udp) SendTo(msg UDPMessage, remoteIp string, remotePort int) {
 	if msg == nil || remoteIp == "" {
 		return
 	}
@@ -106,7 +105,7 @@ func (u Udp) Read(messageChan chan MessageChannelItem) {
 			util.Log.Printf("recvfrom returned (len:%d  from:%s).\n", len, addr.String())
 			peer := getPeerAddress(addr)
 
-			msg, err := messages.DecodeMessageBinary(recvBuf)
+			msg, err := DecodeMessageBinary(recvBuf)
 			if err != nil {
 				util.Log.Printf("Error decoding message: %s", err)
 				continue

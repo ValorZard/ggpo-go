@@ -1,11 +1,7 @@
-package transport
-
-import (
-	"github.com/ikemen-engine/ggpo/internal/messages"
-)
+package udp
 
 type Connection interface {
-	SendTo(msg messages.UDPMessage, remoteIp string, remotePort int)
+	SendTo(msg UDPMessage, remoteIp string, remotePort int)
 	Close()
 	Read(messageChan chan MessageChannelItem)
 }
@@ -17,6 +13,6 @@ type peerAddress struct {
 
 type MessageChannelItem struct {
 	Peer    peerAddress
-	Message messages.UDPMessage
+	Message UDPMessage
 	Length  int
 }

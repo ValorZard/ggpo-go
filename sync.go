@@ -4,9 +4,9 @@ import (
 	"errors"
 
 	"github.com/ikemen-engine/ggpo/internal/util"
+	"github.com/ikemen-engine/ggpo/transport/udp"
 
 	"github.com/ikemen-engine/ggpo/internal/input"
-	"github.com/ikemen-engine/ggpo/internal/messages"
 )
 
 type Sync struct {
@@ -21,7 +21,7 @@ type Sync struct {
 
 	inputQueues []input.InputQueue
 
-	localConnectStatus []messages.UdpConnectStatus
+	localConnectStatus []udp.UdpConnectStatus
 }
 
 //const MaxPredictionFrames int = 8
@@ -47,7 +47,7 @@ type savedState struct {
 	head   int
 }
 
-func NewSync(status []messages.UdpConnectStatus, config *SyncConfig) Sync {
+func NewSync(status []udp.UdpConnectStatus, config *SyncConfig) Sync {
 	s := Sync{
 		config:              *config,
 		session:             config.session,

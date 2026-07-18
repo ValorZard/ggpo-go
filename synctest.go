@@ -1,14 +1,15 @@
 package ggpo
 
 import (
-	"github.com/ikemen-engine/ggpo/internal/util"
 	"os"
+
+	"github.com/ikemen-engine/ggpo/internal/util"
+	"github.com/ikemen-engine/ggpo/transport/udp"
 
 	"github.com/ikemen-engine/ggpo/internal/buffer"
 	"github.com/ikemen-engine/ggpo/internal/input"
 	"github.com/ikemen-engine/ggpo/internal/polling"
 	"github.com/ikemen-engine/ggpo/internal/protocol"
-	"github.com/ikemen-engine/ggpo/transport"
 )
 
 type SyncTest struct {
@@ -247,6 +248,6 @@ func (s *SyncTest) Close() error {
 
 func (s *SyncTest) Start() {}
 
-func (s *SyncTest) InitializeConnection(c ...transport.Connection) error {
+func (s *SyncTest) InitializeConnection(c ...udp.Connection) error {
 	return nil
 }

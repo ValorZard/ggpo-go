@@ -2,11 +2,10 @@ package ggpo
 
 import (
 	"github.com/ikemen-engine/ggpo/internal/input"
-	"github.com/ikemen-engine/ggpo/internal/messages"
 	"github.com/ikemen-engine/ggpo/internal/polling"
 	"github.com/ikemen-engine/ggpo/internal/protocol"
 	"github.com/ikemen-engine/ggpo/internal/util"
-	"github.com/ikemen-engine/ggpo/transport"
+	"github.com/ikemen-engine/ggpo/transport/udp"
 )
 
 const SpectatorFrameBufferSize int = 32
@@ -16,7 +15,7 @@ const DefaultCatchupSpeed int = 1
 type Spectator struct {
 	session         Session
 	poll            polling.Poller
-	connection      transport.Connection
+	connection      udp.Connection
 	host            protocol.UdpProtocol
 	synchonizing    bool
 	inputSize       int
@@ -28,7 +27,7 @@ type Spectator struct {
 	framesBehind    int
 	localPort       int
 	currentFrame    int
-	messageChannel  chan transport.MessageChannelItem
+	messageChannel  chan udp.MessageChannelItem
 }
 
 func NewUDPSpectator(cb Session, localPort int, numPlayers int, inputSize int, hostIp string, hostPort int) Spectator {
@@ -52,7 +51,7 @@ func NewUDPSpectator(cb Session, localPort int, numPlayers int, inputSize int, h
 	s.localPort = localPort
 	var poll polling.Poll = polling.NewPoll()
 	s.poll = &poll
-	s.messageChannel = make(chan transport.MessageChannelItem, 200)
+	s.messageChannel = make(chan udp.MessageChannelItem, 200)
 	//go s.udp.Read()
 	return s
 }
@@ -186,7 +185,7 @@ func (s *Spectator) OnUdpProtocolEvent(evt *protocol.UdpProtocolEvent) {
 	}
 }
 
-func (s *Spectator) HandleMessage(ipAddress string, port int, msg messages.UDPMessage, len int) {
+func (s *Spectator) HandleUDPMessage(ipAddress string, port int, msg udp.UDPMessage, len int) {
 	if s.host.HandlesMsg(ipAddress, port) {
 		s.host.OnMsg(msg, len)
 	}
@@ -219,9 +218,9 @@ func (s *Spectator) SetDisconnectNotifyStart(timeout int) error {
 func (s *Spectator) Close() error {
 	return Error{Code: ErrorCodeInvalidRequest, Name: "ErrorCodeInvalidRequest"}
 }
-func (s *Spectator) InitializeConnection(c ...transport.Connection) error {
+func (s *Spectator) InitializeConnection(c ...udp.Connection) error {
 	if len(c) == 0 {
-		s.connection = transport.NewUdp(s, s.localPort)
+		s.connection = udp.NewUdp(s, s.localPort)
 		return nil
 	}
 	s.connection = c[0]
@@ -231,7 +230,7 @@ func (s *Spectator) InitializeConnection(c ...transport.Connection) error {
 func (s *Spectator) HandleMessages() {
 	for i := 0; i < len(s.messageChannel); i++ {
 		mi := <-s.messageChannel
-		s.HandleMessage(mi.Peer.Ip, mi.Peer.Port, mi.Message, mi.Length)
+		s.HandleUDPMessage(mi.Peer.Ip, mi.Peer.Port, mi.Message, mi.Length)
 	}
 }
 
