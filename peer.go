@@ -87,6 +87,23 @@ func NewPeer(cb Session,
 	return p
 }
 
+/*
+NewDataChannelPeer creates a Peer that communicates over message-oriented data
+channels (such as WebRTC data channels, see the webrtcconn package) instead of
+raw UDP. Register each remote player's channel on the returned
+transport.DataChannel with AddPeerChannel, using the same (ip, port) pair
+passed to NewRemotePlayer for that player; when using data channels the pair
+is only a routing key and does not need to be a real network address.
+There is no need to call InitializeConnection, though calling it with no
+arguments is harmless.
+*/
+func NewDataChannelPeer(cb Session, numPlayers int, inputSize int) (Peer, *transport.DataChannel) {
+	p := NewPeer(cb, 0, numPlayers, inputSize)
+	dataChannel := transport.NewDataChannel()
+	p.connection = dataChannel
+	return p, dataChannel
+}
+
 func (p *Peer) Close() error {
 	for _, e := range p.endpoints {
 		if e.IsInitialized() {
@@ -853,9 +870,18 @@ func (p *Peer) CheckDesync() {
 	}
 }
 
+/*
+InitializeConnection selects the transport the peer communicates over. Called
+with no arguments it binds a raw UDP socket on the peer's local port, unless a
+connection was already chosen at creation time (e.g. by NewDataChannelPeer),
+which it then leaves in place. Pass a transport.Connection to use a custom
+transport, such as a *transport.DataChannel for WebRTC data channels.
+*/
 func (p *Peer) InitializeConnection(t ...transport.Connection) error {
 	if len(t) == 0 {
-		p.connection = transport.NewUdp(p, p.localPort)
+		if p.connection == nil {
+			p.connection = transport.NewUdp(p, p.localPort)
+		}
 		return nil
 	}
 	p.connection = t[0]
