@@ -48,7 +48,7 @@ type Peer struct {
 	messageChannel chan transport.MessageChannelItem
 }
 
-func NewPeer(cb Session,
+func NewUDPPeer(cb Session,
 	localPort int, numPlayers int, inputSize int) Peer {
 	p := Peer{}
 	p.numPlayers = numPlayers

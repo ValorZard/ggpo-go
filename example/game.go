@@ -11,9 +11,9 @@ import (
 	"math"
 	"time"
 
-	"github.com/ikemen-engine/ggpo"
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/hajimehoshi/ebiten/v2/ebitenutil"
+	"github.com/ikemen-engine/ggpo"
 )
 
 type GameSession struct {
@@ -291,7 +291,7 @@ func GameInitSpectator(localPort int, numPlayers int, hostIp string, hostPort in
 	var inputSize int = len(encodeInputs(inputBits))
 	session := NewGameSession()
 
-	spectator := ggpo.NewSpectator(&session, localPort, numPlayers, inputSize, hostIp, hostPort)
+	spectator := ggpo.NewUDPSpectator(&session, localPort, numPlayers, inputSize, hostIp, hostPort)
 	backend = &spectator
 	spectator.InitializeConnection()
 	spectator.Start()
@@ -306,7 +306,7 @@ func GameInit(localPort int, numPlayers int, players []ggpo.Player, numSpectator
 
 	session := NewGameSession()
 
-	peer := ggpo.NewPeer(&session, localPort, numPlayers, inputSize)
+	peer := ggpo.NewUDPPeer(&session, localPort, numPlayers, inputSize)
 	//peer := ggpo.NewSyncTest(&session, numPlayers, 8, inputSize, true)
 	backend = &peer
 	session.backend = backend

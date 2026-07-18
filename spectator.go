@@ -31,7 +31,7 @@ type Spectator struct {
 	messageChannel  chan transport.MessageChannelItem
 }
 
-func NewSpectator(cb Session, localPort int, numPlayers int, inputSize int, hostIp string, hostPort int) Spectator {
+func NewUDPSpectator(cb Session, localPort int, numPlayers int, inputSize int, hostIp string, hostPort int) Spectator {
 	s := Spectator{}
 	s.numPlayers = numPlayers
 	s.inputSize = inputSize
