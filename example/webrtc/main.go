@@ -1,0 +1,131 @@
+// Command webrtc is a two-player build of the example game that connects over
+// WebRTC data channels instead of UDP, so it runs in the browser as WebAssembly.
+//
+// It is the browser counterpart of the UDP example and reuses the same game
+// logic from example/game. Both players agree on a lobby id ahead of time: the
+// host creates the lobby under that id and the other player joins with it, so no
+// generated id has to be exchanged first.
+//
+// Native (two terminals), with a signaling server on :3000:
+//
+//	go run github.com/ikemen-engine/ggpo/cmd/signaling -addr :3000
+//	go run ./example/webrtc -host -lobby test
+//	go run ./example/webrtc -lobby test
+//
+// Browser (WebAssembly): use the bundled dev server in ./serve, which sets
+// go.env = {} to avoid Go's wasm argv/env limit (wasmserve injects the host
+// environment there instead, which overflows the limit on Windows):
+//
+//	go run github.com/ikemen-engine/ggpo/cmd/signaling -addr :3000
+//	go run ./example/webrtc/serve
+//	# open http://localhost:8080/?host=1&lobby=test in one tab
+//	# open http://localhost:8080/?lobby=test        in another
+package main
+
+import (
+	"context"
+	"io"
+	"log"
+
+	"github.com/hajimehoshi/ebiten/v2"
+	"github.com/ikemen-engine/ggpo"
+	"github.com/ikemen-engine/ggpo/example/game"
+	"github.com/ikemen-engine/ggpo/transport/webrtc"
+)
+
+// config is the per-instance setup, read from URL query params under wasm and
+// from command-line flags natively.
+type config struct {
+	host         bool
+	lobbyID      string
+	signalingURL string
+}
+
+const numPlayers = 2
+
+func run(cfg config) {
+	if cfg.lobbyID == "" {
+		cfg.lobbyID = "ggpo-test"
+	}
+	if cfg.signalingURL == "" {
+		cfg.signalingURL = "http://localhost:3000"
+	}
+
+	session := game.NewGameSession()
+	peer := ggpo.NewPeer(&session, numPlayers, game.InputSize())
+	game.SetBackend(&peer)
+	session.SetBackend(&peer)
+
+	tr := webrtc.NewTransport()
+	peer.InitializeTransport(tr)
+
+	// Each side registers the remote player's channel under a handle equal to
+	// that player's number, and adds the player with the same handle, so the
+	// two always line up. The player numbers themselves (1 and 2) are the same
+	// on both sides, which is what GGPO's protocol needs to agree on.
+	players := make([]ggpo.Player, numPlayers)
+	var localNum, remoteNum int
+	if cfg.host {
+		localNum, remoteNum = 1, 2
+	} else {
+		localNum, remoteNum = 2, 1
+	}
+	players[localNum-1] = ggpo.NewLocalPlayer(20, localNum)
+	players[remoteNum-1] = ggpo.NewRemotePlayer(20, remoteNum, ggpo.PlayerHandle(remoteNum))
+
+	channel := connect(cfg)
+	tr.AddPeer(ggpo.PlayerHandle(remoteNum), channel)
+
+	var localHandle ggpo.PlayerHandle
+	for i := range players {
+		var handle ggpo.PlayerHandle
+		if err := peer.AddPlayer(&players[i], &handle); err != nil {
+			log.Fatalf("AddPlayer failed: %s", err)
+		}
+		if players[i].PlayerType == ggpo.PlayerTypeLocal {
+			game.SetCurrentPlayer(int(handle))
+			localHandle = handle
+		}
+	}
+	peer.SetDisconnectTimeout(3000)
+	peer.SetDisconnectNotifyStart(1000)
+	peer.SetFrameDelay(localHandle, game.FrameDelay)
+	peer.Start()
+
+	game.StartClock()
+	if err := ebiten.RunGame(session.Game()); err != nil {
+		log.Fatal(err)
+	}
+}
+
+// connect performs the signaling handshake and returns the established data
+// channel to the remote peer.
+func connect(cfg config) io.ReadWriteCloser {
+	ctx := context.Background()
+	dialer := webrtc.NewDialer(cfg.signalingURL)
+
+	if cfg.host {
+		log.Printf("hosting lobby %q, waiting for a player to join...", cfg.lobbyID)
+		lobby, err := dialer.HostLobbyWithID(ctx, cfg.lobbyID)
+		if err != nil {
+			log.Fatalf("hosting lobby: %s", err)
+		}
+		channel, playerID, err := lobby.Accept(ctx)
+		if err != nil {
+			log.Fatalf("accepting player: %s", err)
+		}
+		log.Printf("player %d connected", playerID)
+		if err := lobby.Delete(ctx); err != nil {
+			log.Printf("deleting lobby: %s", err)
+		}
+		return channel
+	}
+
+	log.Printf("joining lobby %q...", cfg.lobbyID)
+	channel, playerID, err := dialer.Join(ctx, cfg.lobbyID)
+	if err != nil {
+		log.Fatalf("joining lobby: %s", err)
+	}
+	log.Printf("joined as player %d", playerID)
+	return channel
+}

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"strconv"
 	"time"
 
@@ -58,9 +59,20 @@ type Lobby struct {
 
 // HostLobby creates a new lobby on the signaling server.
 func (d *Dialer) HostLobby(ctx context.Context) (*Lobby, error) {
-	body, err := d.get(ctx, d.SignalingURL+"/lobby/host")
+	body, err := d.post(ctx, d.SignalingURL+"/lobby/host", []byte{})
 	if err != nil {
 		return nil, fmt.Errorf("webrtc: hosting lobby: %w", err)
+	}
+	return &Lobby{ID: string(body), dialer: d, handled: make(map[int]bool)}, nil
+}
+
+// HostLobbyWithID creates a lobby under a caller-chosen id. Peers that agreed
+// on an id ahead of time can each connect without first exchanging a generated
+// one; the joiners pass the same id to Join. It fails if the id is taken.
+func (d *Dialer) HostLobbyWithID(ctx context.Context, id string) (*Lobby, error) {
+	body, err := d.post(ctx, d.SignalingURL+"/lobby/hostWithId?id="+url.QueryEscape(id), []byte{})
+	if err != nil {
+		return nil, fmt.Errorf("webrtc: hosting lobby %q: %w", id, err)
 	}
 	return &Lobby{ID: string(body), dialer: d, handled: make(map[int]bool)}, nil
 }
@@ -309,6 +321,22 @@ func (d *Dialer) get(ctx context.Context, url string) ([]byte, error) {
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("GET %s: unexpected status %s", url, resp.Status)
+	}
+	return io.ReadAll(resp.Body)
+}
+
+func (d *Dialer) post(ctx context.Context, endpoint string, payload []byte) ([]byte, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(payload))
+	if err != nil {
+		return nil, err
+	}
+	resp, err := d.HTTPClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("POST %s: unexpected status %s", endpoint, resp.Status)
 	}
 	return io.ReadAll(resp.Body)
 }

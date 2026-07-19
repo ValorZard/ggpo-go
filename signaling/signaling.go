@@ -7,7 +7,7 @@
 //
 // Endpoints:
 //
-//	GET  /lobby/host                                      -> lobby ID (text)
+//	POST /lobby/host                                      -> lobby ID (text)
 //	POST /lobby/hostWithId?id={lobby}					  -> lobby ID (text) (it's the same lobby ID we put in)
 //	GET  /lobby/join?id={lobby}                           -> playerID (JSON number)
 //	GET  /lobby/delete?id={lobby}
@@ -125,18 +125,28 @@ func (s *Server) lobbyHost(w http.ResponseWriter, _ *http.Request) {
 	w.Write([]byte(lobbyID))
 }
 
+// lobbyHostWithId hosts a lobby under a caller-chosen id instead of a generated
+// one, so peers that agreed on an id out of band (e.g. a preset shared in a
+// browser test) can find each other without exchanging a generated id first. It
+// fails if the id is already in use.
 func (s *Server) lobbyHostWithId(w http.ResponseWriter, r *http.Request) {
 	lobbyID := r.URL.Query().Get("id")
+	if lobbyID == "" {
+		http.Error(w, "400 - missing lobby id", http.StatusBadRequest)
+		return
+	}
+
 	s.mutex.Lock()
+	defer s.mutex.Unlock()
 	if _, taken := s.lobbies[lobbyID]; taken {
-		http.Error(w, "403 - Lobby already created", http.StatusForbidden)
+		http.Error(w, "409 - lobby id already in use", http.StatusConflict)
 		return
 	}
 	s.lobbies[lobbyID] = &lobby{
 		clients: make(map[PlayerId]clientConnection),
 		nextID:  1,
 	}
-	s.mutex.Unlock()
+
 	w.Write([]byte(lobbyID))
 }
 

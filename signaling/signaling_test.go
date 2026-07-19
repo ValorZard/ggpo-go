@@ -45,7 +45,7 @@ func doPost(t *testing.T, ts *httptest.Server, path string, body []byte) *http.R
 // hostLobby creates a lobby and returns its ID, asserting the response shape.
 func hostLobby(t *testing.T, ts *httptest.Server) string {
 	t.Helper()
-	resp := doGet(t, ts, "/lobby/host")
+	resp := doPost(t, ts, "/lobby/host", []byte{})
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("host: status %d, want 200", resp.StatusCode)
