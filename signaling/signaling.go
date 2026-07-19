@@ -8,6 +8,7 @@
 // Endpoints:
 //
 //	GET  /lobby/host                                      -> lobby ID (text)
+//	POST /lobby/hostWithId?id={lobby}					  -> lobby ID (text) (it's the same lobby ID we put in)
 //	GET  /lobby/join?id={lobby}                           -> playerID (JSON number)
 //	GET  /lobby/delete?id={lobby}
 //	GET  /lobby/leave?lobby_id={lobby}&player_id={player}
@@ -68,6 +69,7 @@ func NewServer() *Server {
 func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/lobby/host", s.lobbyHost)
+	mux.HandleFunc("/lobby/hostWithId", s.lobbyHostWithId)
 	mux.HandleFunc("/lobby/join", s.lobbyJoin)
 	mux.HandleFunc("/lobby/delete", s.lobbyDelete)
 	mux.HandleFunc("/lobby/leave", s.lobbyLeave)
@@ -120,6 +122,21 @@ func (s *Server) lobbyHost(w http.ResponseWriter, _ *http.Request) {
 	}
 	s.mutex.Unlock()
 
+	w.Write([]byte(lobbyID))
+}
+
+func (s *Server) lobbyHostWithId(w http.ResponseWriter, r *http.Request) {
+	lobbyID := r.URL.Query().Get("id")
+	s.mutex.Lock()
+	if _, taken := s.lobbies[lobbyID]; taken {
+		http.Error(w, "403 - Lobby already created", http.StatusForbidden)
+		return
+	}
+	s.lobbies[lobbyID] = &lobby{
+		clients: make(map[PlayerId]clientConnection),
+		nextID:  1,
+	}
+	s.mutex.Unlock()
 	w.Write([]byte(lobbyID))
 }
 

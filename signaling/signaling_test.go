@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"sync"
 	"testing"
 
@@ -56,6 +57,26 @@ func hostLobby(t *testing.T, ts *httptest.Server) string {
 	id := string(b)
 	if len(id) != lobbyIDLength {
 		t.Fatalf("host: lobby id %q has length %d, want %d", id, len(id), lobbyIDLength)
+	}
+	return id
+}
+
+// hostLobby creates a lobby and returns its ID, asserting the response shape.
+func hostLobbyWithId(t *testing.T, ts *httptest.Server, id string) string {
+	t.Helper()
+	request_string := "/lobby/hostWithId?id=" + id
+	resp := doPost(t, ts, request_string, []byte{})
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("host: status %d, want 200", resp.StatusCode)
+	}
+	b, err := io.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatalf("host: read body: %v", err)
+	}
+	returnedId := string(b)
+	if id != returnedId {
+		t.Fatalf("host: lobby id %q is not returned id %q", id, returnedId)
 	}
 	return id
 }
@@ -151,6 +172,28 @@ func TestHostReturnsUniqueLobbyIDs(t *testing.T) {
 	}
 }
 
+func TestHostReturnsCustomLobbyID(t *testing.T) {
+	s, ts := newTestServer(t)
+
+	seen := map[string]bool{}
+	const n = 50
+	for i := 0; i < n; i++ {
+		id := hostLobbyWithId(t, ts, strconv.Itoa(i))
+		if seen[id] {
+			t.Fatalf("duplicate lobby id %q", id)
+		}
+		seen[id] = true
+	}
+	if len(s.lobbies) != n {
+		t.Errorf("server holds %d lobbies, want %d", len(s.lobbies), n)
+	}
+}
+
+/*
+TODO: add test where we can't use a lobby id that already exists in hostWithId
+func TestHostReuseLobbyID(t *testing.T) {
+}
+*/
 func TestJoinAssignsSequentialPlayerIDs(t *testing.T) {
 	_, ts := newTestServer(t)
 	lobbyID := hostLobby(t, ts) // host is player 0

@@ -1,4 +1,4 @@
-package main
+package game
 
 import (
 	"bytes"
@@ -14,7 +14,6 @@ import (
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/hajimehoshi/ebiten/v2/ebitenutil"
 	"github.com/ikemen-engine/ggpo"
-	"github.com/ikemen-engine/ggpo/transport/udp"
 )
 
 type GameSession struct {
@@ -26,9 +25,34 @@ type GameSession struct {
 var backend ggpo.Backend
 var start, next, now int64
 
-const FRAME_DELAY int = 2
+// FrameDelay is the local input delay the example mains configure via
+// ggpo.Backend.SetFrameDelay.
+const FrameDelay int = 2
 
 var currentPlayer int = 1
+
+// SetBackend sets the backend the game loop drives. Call it before
+// ebiten.RunGame.
+func SetBackend(b ggpo.Backend) {
+	backend = b
+}
+
+// SetCurrentPlayer sets the player handle local inputs are added under.
+func SetCurrentPlayer(handle int) {
+	currentPlayer = handle
+}
+
+// InputSize returns the byte size of one player's encoded input.
+func InputSize() int {
+	return len(encodeInputs(InputBits(0)))
+}
+
+// StartClock initializes the frame timing the game loop reads.
+func StartClock() {
+	start = time.Now().UnixMilli()
+	next = start
+	now = start
+}
 
 type Game struct {
 	Players  []Player
@@ -235,6 +259,12 @@ func (g *GameSession) LogGameState(fileName string, buffer []byte, len int) {
 }
 
 func (g *GameSession) SetBackend(backend ggpo.Backend) {
+	g.backend = backend
+}
+
+// Game returns the ebiten game to pass to ebiten.RunGame.
+func (g *GameSession) Game() *Game {
+	return g.game
 }
 
 func (g *Game) String() string {
@@ -284,67 +314,6 @@ func (g *GameSession) OnEvent(info *ggpo.Event) {
 		log.Printf("Desync Error! LocalCheckSum %d Remote Checksum %d\n", info.LocalChecksum, info.RemoteChecksum)
 		panic("DesyncError")
 	}
-}
-
-func GameInitSpectator(localPort int, numPlayers int, hostIp string, hostPort int) *Game {
-	var inputBits InputBits = 0
-
-	var inputSize int = len(encodeInputs(inputBits))
-	session := NewGameSession()
-
-	hostHandle := ggpo.PlayerHandle(1)
-	spectator := ggpo.NewSpectator(&session, numPlayers, inputSize, hostHandle)
-	backend = &spectator
-
-	tr := udp.NewUdp(localPort)
-	tr.AddPeer(hostHandle, hostIp, hostPort)
-	spectator.InitializeTransport(tr)
-	spectator.Start()
-
-	return session.game
-}
-
-func GameInit(localPort int, numPlayers int, players []ggpo.Player, numSpectators int, remotePeers []remotePeer) *Game {
-	var result error
-	var inputBits InputBits = 0
-	var inputSize int = len(encodeInputs(inputBits))
-
-	session := NewGameSession()
-
-	peer := ggpo.NewPeer(&session, numPlayers, inputSize)
-	//peer := ggpo.NewSyncTest(&session, numPlayers, 8, inputSize, true)
-	backend = &peer
-	session.backend = backend
-
-	tr := udp.NewUdp(localPort)
-	for _, rp := range remotePeers {
-		tr.AddPeer(rp.handle, rp.ip, rp.port)
-	}
-	peer.InitializeTransport(tr)
-
-	//session.SetDisconnectTimeout(3000)
-	//session.SetDisconnectNotifyStart(1000)
-	var localHandle ggpo.PlayerHandle
-	for i := 0; i < numPlayers+numSpectators; i++ {
-		var handle ggpo.PlayerHandle
-		result = peer.AddPlayer(&players[i], &handle)
-
-		if players[i].PlayerType == ggpo.PlayerTypeLocal {
-			currentPlayer = int(handle)
-		}
-		if result != nil {
-			log.Fatalf("There's an issue from AddPlayer")
-		}
-		if players[i].PlayerType == ggpo.PlayerTypeLocal {
-			localHandle = handle
-		}
-	}
-	peer.SetDisconnectTimeout(3000)
-	peer.SetDisconnectNotifyStart(1000)
-	peer.SetFrameDelay(localHandle, FRAME_DELAY)
-
-	peer.Start()
-	return session.game
 }
 
 func NewGameSession() GameSession {
