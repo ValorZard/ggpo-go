@@ -5,7 +5,9 @@ GGPO-Go is a port of the GGPO rollback netcode library into Go. Currently unfini
 ## Usage 
 General usage would be best explained by looking at the code in the example folder.
 
-But to view the example, follow the following steps: 
+## Running the UDP backend example
+
+follow the following steps: 
 
 - Clone the repository. 
 - enter:
@@ -15,7 +17,6 @@ An example usage would be to open one command line input with the following comm
 `go run ./example/ 7000 2 local 127.0.0.1:7001 1`
 and another with this command 
 `go run ./example/ 7001 2 127.0.0.1:7000 local 2`
-
 
 If you want to have a spectator, make sure the spectator connect to the host FIRST before the host connects with player 2
 
@@ -27,6 +28,8 @@ spectator, listening on 7100, watching player 1
 
 player 2
 `go run ./example/ 7001 2 127.0.0.1:7000 local 2`
+
+## Running the WebRTC backend example
 
 If you want to run the webrtc demo, then do
 
@@ -43,7 +46,11 @@ tab 2: http://localhost:8080/?lobby=test
 They should connect and you can then move around with arrow keys.
 
 WebRTC should work natively as well, just run
+
 `go run ./example/webrtc -host -lobby test`
+
 and then
-`go run ./example/webrtc -lobby test`
-to connect.
+
+`go run ./example/webrtc -lobby test` 
+
+in a separate terminal to connect.
