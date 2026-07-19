@@ -59,22 +59,21 @@ func run(cfg config) {
 	tr := webrtc.NewTransport()
 	peer.InitializeTransport(tr)
 
-	// Each side registers the remote player's channel under a handle equal to
-	// that player's number, and adds the player with the same handle, so the
-	// two always line up. The player numbers themselves (1 and 2) are the same
-	// on both sides, which is what GGPO's protocol needs to agree on.
+	// Global, shared across both peers: the host is always player 1, the client always player 2.
+	// Each machine marks its own as local and the other as remote.
+	const hostNum, clientNum = 1, 2
+
 	players := make([]ggpo.Player, numPlayers)
-	var localNum, remoteNum int
 	if cfg.host {
-		localNum, remoteNum = 1, 2
+		players[0] = ggpo.NewLocalPlayer(20, hostNum)
+		players[1] = ggpo.NewRemotePlayer(20, clientNum, ggpo.PlayerHandle(clientNum))
 	} else {
-		localNum, remoteNum = 2, 1
+		players[0] = ggpo.NewLocalPlayer(20, clientNum)
+		players[1] = ggpo.NewRemotePlayer(20, hostNum, ggpo.PlayerHandle(hostNum))
 	}
-	players[localNum-1] = ggpo.NewLocalPlayer(20, localNum)
-	players[remoteNum-1] = ggpo.NewRemotePlayer(20, remoteNum, ggpo.PlayerHandle(remoteNum))
 
 	channel := connect(cfg)
-	tr.AddPeer(ggpo.PlayerHandle(remoteNum), channel)
+	tr.AddPeer(ggpo.PlayerHandle(players[1].Remote.Handle), channel)
 
 	var localHandle ggpo.PlayerHandle
 	for i := range players {
