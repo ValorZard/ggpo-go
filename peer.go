@@ -308,7 +308,7 @@ func (p *Peer) AddSpectator(ip string, port int) error {
 // Maps to top level API function
 func (p *Peer) AddPlayer(player *Player, handle *PlayerHandle) error {
 	if player.PlayerType == PlayerTypeSpectator {
-		return p.AddSpectator(player.Remote.IpAdress, player.Remote.Port)
+		return p.AddSpectator(player.Remote.IpAddress, player.Remote.Port)
 	}
 
 	queue := player.PlayerNum - 1
@@ -318,7 +318,7 @@ func (p *Peer) AddPlayer(player *Player, handle *PlayerHandle) error {
 	*handle = p.QueueToPlayerHandle(queue)
 
 	if player.PlayerType == PlayerTypeRemote {
-		p.AddRemotePlayer(player.Remote.IpAdress, player.Remote.Port, queue)
+		p.AddRemotePlayer(player.Remote.IpAddress, player.Remote.Port, queue)
 	}
 
 	return nil

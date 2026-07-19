@@ -26,29 +26,29 @@ func NewLocalPlayer(size int, playerNum int) Player {
 		PlayerType: PlayerTypeLocal}
 }
 
-func NewRemotePlayer(size int, playerNum int, ipAdress string, port int) Player {
+func NewRemotePlayer(size int, playerNum int, ipAddress string, port int) Player {
 	return Player{
 		Size:       size,
 		PlayerNum:  playerNum,
 		PlayerType: PlayerTypeRemote,
 		Remote: RemotePlayer{
-			IpAdress: ipAdress,
-			Port:     port},
+			IpAddress: ipAddress,
+			Port:      port},
 	}
 }
-func NewSpectatorPlayer(size int, ipAdress string, port int) Player {
+func NewSpectatorPlayer(size int, ipAddress string, port int) Player {
 	return Player{
 		Size:       size,
 		PlayerType: PlayerTypeSpectator,
 		Remote: RemotePlayer{
-			IpAdress: ipAdress,
-			Port:     port},
+			IpAddress: ipAddress,
+			Port:      port},
 	}
 }
 
 type RemotePlayer struct {
-	IpAdress string
-	Port     int
+	IpAddress string
+	Port      int
 }
 
 type LocalEndpoint struct {

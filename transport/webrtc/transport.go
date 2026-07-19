@@ -26,7 +26,7 @@ const maxMessageSize = 4096
 //	ch, playerID, _ := lobby.Accept(ctx)
 //	ip, port := addrForPlayer(playerID)
 //	tr.AddPeer(ip, port, ch)
-//	backend.AddPlayer(&Player{Remote: {IpAdress: ip, Port: port}, ...}, &handle)
+//	backend.AddPlayer(&Player{Remote: {IpAddress: ip, Port: port}, ...}, &handle)
 type Transport struct {
 	mu        sync.Mutex
 	peers     map[string]*peer
