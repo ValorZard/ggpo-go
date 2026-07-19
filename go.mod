@@ -1,17 +1,21 @@
 module github.com/ikemen-engine/ggpo
 
-go 1.24.0
+go 1.25.0
 
 require (
-	github.com/hajimehoshi/ebiten/v2 v2.3.4
-	golang.org/x/exp v0.0.0-20220609121020-a51bd0440498
+	github.com/hajimehoshi/ebiten/v2 v2.9.9
+	github.com/pion/webrtc/v4 v4.2.17
+	golang.org/x/exp v0.0.0-20260718201538-764159d718ef
 )
 
 require (
-	github.com/go-gl/glfw/v3.3/glfw v0.0.0-20220320163800-277f93cfa958 // indirect
-	github.com/gofrs/flock v0.8.1 // indirect
+	github.com/ebitengine/gomobile v0.0.0-20260211053922-3d992dae95d1 // indirect
+	github.com/ebitengine/hideconsole v1.0.0 // indirect
+	github.com/ebitengine/purego v0.10.1 // indirect
+	github.com/go-gl/glfw/v3.3/glfw v0.0.0-20260707082822-2a407d02d01a // indirect
+	github.com/gofrs/flock v0.13.0 // indirect
 	github.com/google/uuid v1.6.0 // indirect
-	github.com/jezek/xgb v1.0.0 // indirect
+	github.com/jezek/xgb v1.3.1 // indirect
 	github.com/pion/datachannel v1.6.2 // indirect
 	github.com/pion/dtls/v3 v3.1.5 // indirect
 	github.com/pion/ice/v4 v4.3.0 // indirect
@@ -27,14 +31,13 @@ require (
 	github.com/pion/stun/v3 v3.1.6 // indirect
 	github.com/pion/transport/v4 v4.0.2 // indirect
 	github.com/pion/turn/v5 v5.0.12 // indirect
-	github.com/pion/webrtc/v4 v4.2.17 // indirect
 	github.com/wlynxg/anet v0.0.5 // indirect
-	golang.org/x/crypto v0.48.0 // indirect
-	golang.org/x/exp/shiny v0.0.0-20220613132600-b0d781184e0d // indirect
-	golang.org/x/image v0.0.0-20220321031419-a8550c1d254a // indirect
-	golang.org/x/mobile v0.0.0-20220518205345-8578da9835fd // indirect
-	golang.org/x/net v0.50.0 // indirect
-	golang.org/x/sync v0.0.0-20210220032951-036812b2e83c // indirect
-	golang.org/x/sys v0.41.0 // indirect
-	golang.org/x/time v0.14.0 // indirect
+	golang.org/x/crypto v0.54.0 // indirect
+	golang.org/x/exp/shiny v0.0.0-20260718201538-764159d718ef // indirect
+	golang.org/x/image v0.44.0 // indirect
+	golang.org/x/mobile v0.0.0-20260709172247-6129f5bee9d5 // indirect
+	golang.org/x/net v0.57.0 // indirect
+	golang.org/x/sync v0.22.0 // indirect
+	golang.org/x/sys v0.47.0 // indirect
+	golang.org/x/time v0.15.0 // indirect
 )
