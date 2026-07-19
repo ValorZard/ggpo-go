@@ -14,6 +14,7 @@ import (
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/hajimehoshi/ebiten/v2/ebitenutil"
 	"github.com/ikemen-engine/ggpo"
+	"github.com/ikemen-engine/ggpo/transport/udp"
 )
 
 type GameSession struct {
@@ -291,26 +292,35 @@ func GameInitSpectator(localPort int, numPlayers int, hostIp string, hostPort in
 	var inputSize int = len(encodeInputs(inputBits))
 	session := NewGameSession()
 
-	spectator := ggpo.NewUDPSpectator(&session, localPort, numPlayers, inputSize, hostIp, hostPort)
+	hostHandle := ggpo.PlayerHandle(1)
+	spectator := ggpo.NewSpectator(&session, numPlayers, inputSize, hostHandle)
 	backend = &spectator
-	spectator.InitializeConnection()
+
+	tr := udp.NewUdp(localPort)
+	tr.AddPeer(hostHandle, hostIp, hostPort)
+	spectator.InitializeTransport(tr)
 	spectator.Start()
 
 	return session.game
 }
 
-func GameInit(localPort int, numPlayers int, players []ggpo.Player, numSpectators int) *Game {
+func GameInit(localPort int, numPlayers int, players []ggpo.Player, numSpectators int, remotePeers []remotePeer) *Game {
 	var result error
 	var inputBits InputBits = 0
 	var inputSize int = len(encodeInputs(inputBits))
 
 	session := NewGameSession()
 
-	peer := ggpo.NewUDPPeer(&session, localPort, numPlayers, inputSize)
+	peer := ggpo.NewPeer(&session, numPlayers, inputSize)
 	//peer := ggpo.NewSyncTest(&session, numPlayers, 8, inputSize, true)
 	backend = &peer
 	session.backend = backend
-	peer.InitializeConnection()
+
+	tr := udp.NewUdp(localPort)
+	for _, rp := range remotePeers {
+		tr.AddPeer(rp.handle, rp.ip, rp.port)
+	}
+	peer.InitializeTransport(tr)
 
 	//session.SetDisconnectTimeout(3000)
 	//session.SetDisconnectNotifyStart(1000)

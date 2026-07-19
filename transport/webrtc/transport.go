@@ -2,7 +2,6 @@ package webrtc
 
 import (
 	"io"
-	"strconv"
 	"sync"
 
 	"github.com/ikemen-engine/ggpo/transport"
@@ -13,23 +12,22 @@ import (
 // large enough for the biggest GGPO packet.
 const maxMessageSize = 4096
 
-// Transport adapts a set of WebRTC data channels to transport.Connection, so
+// Transport adapts a set of WebRTC data channels to transport.Transport, so
 // the GGPO protocol layer can drive a WebRTC session exactly as it drives UDP.
 //
-// The protocol layer addresses peers by (ip, port), but WebRTC has no such
-// addresses. Each established channel is therefore registered with AddPeer
-// under a synthetic address, and the caller reuses that same address when it
-// adds the player to the session (Backend.AddPlayer). A typical host flow:
+// Peers are identified by the player handle the signaling server assigned in
+// the lobby: register each established channel under that handle with AddPeer,
+// and use the same handle when adding the player to the session
+// (Backend.AddPlayer). A typical host flow:
 //
 //	tr := webrtc.NewTransport()
-//	backend.InitializeConnection(tr)   // protocol layer will call tr.Read
-//	ch, playerID, _ := lobby.Accept(ctx)
-//	ip, port := addrForPlayer(playerID)
-//	tr.AddPeer(ip, port, ch)
-//	backend.AddPlayer(&Player{Remote: {IpAddress: ip, Port: port}, ...}, &handle)
+//	backend.InitializeTransport(tr) // protocol layer will call tr.Read
+//	ch, player, _ := lobby.Accept(ctx)
+//	tr.AddPeer(player, ch)
+//	backend.AddPlayer(&Player{Remote: RemotePlayer{Handle: player}, ...}, &handle)
 type Transport struct {
 	mu        sync.Mutex
-	peers     map[string]*peer
+	peers     map[transport.PlayerHandle]*peer
 	msgChan   chan transport.MessageChannelItem
 	done      chan struct{}
 	closeOnce sync.Once
@@ -37,47 +35,41 @@ type Transport struct {
 
 type peer struct {
 	channel io.ReadWriteCloser
-	ip      string
-	port    int
+	handle  transport.PlayerHandle
 	reading bool
 }
 
 func NewTransport() *Transport {
 	return &Transport{
-		peers: make(map[string]*peer),
+		peers: make(map[transport.PlayerHandle]*peer),
 		done:  make(chan struct{}),
 	}
 }
 
-func addrKey(ip string, port int) string {
-	return ip + ":" + strconv.Itoa(port)
-}
-
-// AddPeer registers an established data channel under the synthetic address the
-// session will use for this player. It is safe to call before or after Read: a
-// reader goroutine starts as soon as both the channel and the destination for
-// decoded messages (set by Read) are known.
-// TODO: we don't need to do this, just replace this with the player's id as assigned from the lobby
-func (t *Transport) AddPeer(ip string, port int, channel io.ReadWriteCloser) {
+// AddPeer registers an established data channel under the peer's lobby-assigned
+// player handle. It is safe to call before or after Read: a reader goroutine
+// starts as soon as both the channel and the destination for decoded messages
+// (set by Read) are known.
+func (t *Transport) AddPeer(player transport.PlayerHandle, channel io.ReadWriteCloser) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	p := &peer{channel: channel, ip: ip, port: port}
-	t.peers[addrKey(ip, port)] = p
+	p := &peer{channel: channel, handle: player}
+	t.peers[player] = p
 	if t.msgChan != nil {
 		p.reading = true
 		go t.readPeer(p)
 	}
 }
 
-// SendTo serializes msg and writes it to the data channel registered for
-// remoteIp:remotePort. Sends to an unregistered peer are dropped, mirroring a
-// UDP send to an unreachable address.
-func (t *Transport) SendTo(msg transport.Message, remoteIp string, remotePort int) {
+// SendTo serializes msg and writes it to the data channel registered for the
+// peer. Sends to an unregistered peer are dropped, mirroring a UDP send to an
+// unreachable address.
+func (t *Transport) SendTo(msg transport.Message, player transport.PlayerHandle) {
 	if msg == nil {
 		return
 	}
 	t.mu.Lock()
-	p, ok := t.peers[addrKey(remoteIp, remotePort)]
+	p, ok := t.peers[player]
 	t.mu.Unlock()
 	if !ok {
 		return
@@ -102,7 +94,7 @@ func (t *Transport) Read(messageChan chan transport.MessageChannelItem) {
 }
 
 // readPeer reads whole packets from one data channel until it closes, decoding
-// each and forwarding it tagged with the peer's synthetic address.
+// each and forwarding it tagged with the peer's player handle.
 func (t *Transport) readPeer(p *peer) {
 	buf := make([]byte, maxMessageSize)
 	for {
@@ -119,7 +111,7 @@ func (t *Transport) readPeer(p *peer) {
 		}
 		select {
 		case t.msgChan <- transport.MessageChannelItem{
-			Peer:    transport.PeerAddress{Ip: p.ip, Port: p.port},
+			Player:  p.handle,
 			Message: msg,
 			Length:  n,
 		}:

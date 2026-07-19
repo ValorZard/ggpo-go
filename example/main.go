@@ -11,13 +11,21 @@ import (
 	//	"net/http"
 	// _ "net/http/pprof"
 
-	"github.com/ikemen-engine/ggpo"
 	"github.com/hajimehoshi/ebiten/v2"
+	"github.com/ikemen-engine/ggpo"
 )
 
 type peerAddress struct {
 	ip   string
 	port int
+}
+
+// remotePeer is a player handle together with the UDP address to register it
+// under.
+type remotePeer struct {
+	handle ggpo.PlayerHandle
+	ip     string
+	port   int
 }
 
 func getPeerAddress(address string) peerAddress {
@@ -89,13 +97,17 @@ func main() {
 		}
 
 		players := make([]ggpo.Player, ggpo.MaxPlayers+ggpo.MaxSpectators)
+		var remotePeers []remotePeer
 		var i int
 		for i = 0; i < numPlayers; i++ {
+			// the handle for each remote player is simply their player number
+			handle := ggpo.PlayerHandle(i + 1)
 			if ipAddress[i] == "local" {
 				players[i] = ggpo.NewLocalPlayer(20, i+1)
 			} else {
 				remoteAddress := getPeerAddress(ipAddress[i])
-				players[i] = ggpo.NewRemotePlayer(20, i+1, remoteAddress.ip, remoteAddress.port)
+				players[i] = ggpo.NewRemotePlayer(20, i+1, handle)
+				remotePeers = append(remotePeers, remotePeer{handle: handle, ip: remoteAddress.ip, port: remoteAddress.port})
 			}
 		}
 
@@ -103,12 +115,15 @@ func main() {
 		numSpectators := 0
 		for offset < len(argsWithoutProg) {
 			remoteAddress := getPeerAddress(argsWithoutProg[offset])
-			players[i] = ggpo.NewSpectatorPlayer(20, remoteAddress.ip, remoteAddress.port)
+			// spectator handles start at 1000 to stay clear of player numbers
+			handle := ggpo.PlayerHandle(1000 + numSpectators)
+			players[i] = ggpo.NewSpectatorPlayer(20, handle)
+			remotePeers = append(remotePeers, remotePeer{handle: handle, ip: remoteAddress.ip, port: remoteAddress.port})
 			numSpectators++
 			i++
 			offset++
 		}
-		game = GameInit(localPort, numPlayers, players, numSpectators)
+		game = GameInit(localPort, numPlayers, players, numSpectators, remotePeers)
 	}
 
 	flag.Parse()

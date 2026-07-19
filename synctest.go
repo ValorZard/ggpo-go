@@ -247,6 +247,6 @@ func (s *SyncTest) Close() error {
 
 func (s *SyncTest) Start() {}
 
-func (s *SyncTest) InitializeConnection(c ...transport.Connection) error {
+func (s *SyncTest) InitializeTransport(t transport.Transport) error {
 	return nil
 }

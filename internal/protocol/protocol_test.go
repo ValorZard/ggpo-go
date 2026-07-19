@@ -1,7 +1,6 @@
 package protocol_test
 
 import (
-	"strconv"
 	"testing"
 	"time"
 
@@ -12,10 +11,10 @@ import (
 	"github.com/ikemen-engine/ggpo/transport"
 )
 
+// Player handles the two test endpoints are registered under.
 const (
-	testPeerAddress = "127.2.1.1"
-	testPeerPort    = 7001
-	testLocalPort   = 7000
+	testPeerHandle  = 7001
+	testLocalHandle = 7000
 )
 
 func defaultConnectStatus() []transport.ConnectStatus {
@@ -34,25 +33,25 @@ func fourConnectStatus() []transport.ConnectStatus {
 	}
 }
 
-func MakeEndpoint() (*mocks.FakeConnection, protocol.UdpProtocol) {
+func MakeEndpoint() (*mocks.FakeTransport, protocol.Protocol) {
 	return MakeEndpointWithStatus(defaultConnectStatus())
 }
 
-func MakeEndpointWithStatus(connectStatus []transport.ConnectStatus) (*mocks.FakeConnection, protocol.UdpProtocol) {
-	connection := mocks.NewFakeConnection()
-	endpoint := protocol.NewUdpProtocol(&connection, 0, testPeerAddress, testPeerPort, &connectStatus)
+func MakeEndpointWithStatus(connectStatus []transport.ConnectStatus) (*mocks.FakeTransport, protocol.Protocol) {
+	connection := mocks.NewFakeTransport()
+	endpoint := protocol.NewProtocol(&connection, 0, testPeerHandle, &connectStatus)
 	return &connection, endpoint
 }
 
-func MakeTwoEndpoints(connectStatus []transport.ConnectStatus) (*mocks.FakeP2PConnection, *protocol.UdpProtocol, *mocks.FakeP2PConnection, *protocol.UdpProtocol) {
+func MakeTwoEndpoints(connectStatus []transport.ConnectStatus) (*mocks.FakeP2PTransport, *protocol.Protocol, *mocks.FakeP2PTransport, *protocol.Protocol) {
 	f := &mocks.FakeMessageHandler{}
 	f2 := &mocks.FakeMessageHandler{}
 
-	connection := mocks.NewFakeP2PConnection(f, testPeerPort, testPeerAddress)
-	endpoint := protocol.NewUdpProtocol(&connection, 0, testPeerAddress, testLocalPort, &connectStatus)
+	connection := mocks.NewFakeP2PTransport(f, testPeerHandle)
+	endpoint := protocol.NewProtocol(&connection, 0, testLocalHandle, &connectStatus)
 
-	connection2 := mocks.NewFakeP2PConnection(f2, testLocalPort, testPeerAddress)
-	endpoint2 := protocol.NewUdpProtocol(&connection2, 0, testPeerAddress, testPeerPort, &connectStatus)
+	connection2 := mocks.NewFakeP2PTransport(f2, testLocalHandle)
+	endpoint2 := protocol.NewProtocol(&connection2, 0, testPeerHandle, &connectStatus)
 
 	f2.Endpoint = &endpoint
 	f.Endpoint = &endpoint2
@@ -65,7 +64,7 @@ func MakeTwoEndpoints(connectStatus []transport.ConnectStatus) (*mocks.FakeP2PCo
 
 // synchronizeEndpoint drives an endpoint through the full sync-request/reply
 // handshake by replaying the required number of sync replies back at it.
-func synchronizeEndpoint(connection *mocks.FakeConnection, endpoint *protocol.UdpProtocol) {
+func synchronizeEndpoint(connection *mocks.FakeTransport, endpoint *protocol.Protocol) {
 	endpoint.Synchronize()
 	syncRequest := connection.LastSentMessage.(*transport.SyncRequestPacket)
 
@@ -81,7 +80,7 @@ func synchronizeEndpoint(connection *mocks.FakeConnection, endpoint *protocol.Ud
 // synchronizeAndDrainEvents completes the handshake and pops the synchronizing /
 // synchronized / connected events off the queue, leaving the endpoint ready to
 // send game input.
-func synchronizeAndDrainEvents(connection *mocks.FakeConnection, endpoint *protocol.UdpProtocol) {
+func synchronizeAndDrainEvents(connection *mocks.FakeTransport, endpoint *protocol.Protocol) {
 	synchronizeEndpoint(connection, endpoint)
 	for i := 0; i < protocol.NumSyncPackets+1; i++ {
 		endpoint.GetEvent()
@@ -90,7 +89,7 @@ func synchronizeAndDrainEvents(connection *mocks.FakeConnection, endpoint *proto
 
 // polls the endpoint enough times to emit a heartbeat input packet
 // and asserts that it did.
-func triggerHeartbeatInput(t *testing.T, connection *mocks.FakeConnection, endpoint *protocol.UdpProtocol) {
+func triggerHeartbeatInput(t *testing.T, connection *mocks.FakeTransport, endpoint *protocol.Protocol) {
 	t.Helper()
 	heartbeatTriggerInterval := 2
 	for i := 0; i < heartbeatTriggerInterval; i++ {
@@ -101,7 +100,7 @@ func triggerHeartbeatInput(t *testing.T, connection *mocks.FakeConnection, endpo
 	}
 }
 
-func TestMakeUDPProtocol(t *testing.T) {
+func TestMakeProtocol(t *testing.T) {
 	_, endpoint := MakeEndpoint()
 	if !endpoint.IsInitialized() {
 		t.Errorf("The fake connection wasn't properly saved.")
@@ -114,12 +113,11 @@ func TestMakeUDPProtocol(t *testing.T) {
 /*
 	Characterization dunno why it works this way
 */
-func TestUDPProtocolSendInput(t *testing.T) {
+func TestProtocolSendInput(t *testing.T) {
 	connection, endpoint := MakeEndpoint()
 	input := input.GameInput{Bits: []byte{1, 2, 3, 4}}
 	endpoint.SendInput(&input)
-	portStr := strconv.Itoa(endpoint.PeerPort)
-	msgs, ok := connection.SendMap[endpoint.PeerAddress+":"+portStr]
+	msgs, ok := connection.SendMap[endpoint.PeerHandle]
 	if ok != true {
 		t.Errorf("The message was never sent. ")
 	}
@@ -130,15 +128,14 @@ func TestUDPProtocolSendInput(t *testing.T) {
 	}
 }
 
-func TestUDPProtocolSendMultipleInput(t *testing.T) {
+func TestProtocolSendMultipleInput(t *testing.T) {
 	connection, endpoint := MakeEndpoint()
 	input := input.GameInput{Size: 4, Bits: []byte{1, 2, 3, 4}}
 	numInputs := 8
 	for i := 0; i < numInputs; i++ {
 		endpoint.SendInput(&input)
 	}
-	portStr := strconv.Itoa(endpoint.PeerPort)
-	messages, ok := connection.SendMap[endpoint.PeerAddress+":"+portStr]
+	messages, ok := connection.SendMap[endpoint.PeerHandle]
 	if ok != true {
 		t.Errorf("The messages were never sent. ")
 	}
@@ -149,11 +146,10 @@ func TestUDPProtocolSendMultipleInput(t *testing.T) {
 	}
 }
 
-func TestUDPProtocolSynchronize(t *testing.T) {
+func TestProtocolSynchronize(t *testing.T) {
 	connection, endpoint := MakeEndpoint()
 	endpoint.Synchronize()
-	portStr := strconv.Itoa(endpoint.PeerPort)
-	msgs, ok := connection.SendMap[endpoint.PeerAddress+":"+portStr]
+	msgs, ok := connection.SendMap[endpoint.PeerHandle]
 	if ok != true {
 		t.Errorf("The message was not sent. ")
 	}
@@ -164,11 +160,10 @@ func TestUDPProtocolSynchronize(t *testing.T) {
 	}
 }
 
-func TestUDPProtocolSendInputAck(t *testing.T) {
+func TestProtocolSendInputAck(t *testing.T) {
 	connection, endpoint := MakeEndpoint()
 	endpoint.SendInputAck()
-	portStr := strconv.Itoa(endpoint.PeerPort)
-	msgs, ok := connection.SendMap[endpoint.PeerAddress+":"+portStr]
+	msgs, ok := connection.SendMap[endpoint.PeerHandle]
 	if ok != true {
 		t.Errorf("The message was not sent. ")
 	}
@@ -179,15 +174,14 @@ func TestUDPProtocolSendInputAck(t *testing.T) {
 	}
 }
 
-func TestUDPProtocolOnQualityReport(t *testing.T) {
+func TestProtocolOnQualityReport(t *testing.T) {
 	connection, endpoint := MakeEndpoint()
-	portStr := strconv.Itoa(endpoint.PeerPort)
 	msg := transport.NewMessage(transport.QualityReportMsg)
 	qualityReportPacket := msg.(*transport.QualityReportPacket)
 	qualityReportPacket.FrameAdvantage = 6
 	qualityReportPacket.Ping = 50
 	endpoint.OnQualityReport(qualityReportPacket, qualityReportPacket.PacketSize())
-	msgs, ok := connection.SendMap[endpoint.PeerAddress+":"+portStr]
+	msgs, ok := connection.SendMap[endpoint.PeerHandle]
 	if ok != true {
 		t.Errorf("The message was not sent. ")
 	}
@@ -198,15 +192,14 @@ func TestUDPProtocolOnQualityReport(t *testing.T) {
 	}
 }
 
-func TestUDPProtocolOnSyncRequest(t *testing.T) {
+func TestProtocolOnSyncRequest(t *testing.T) {
 	connection, endpoint := MakeEndpoint()
-	portStr := strconv.Itoa(endpoint.PeerPort)
 	msg := transport.NewMessage(transport.SyncRequestMsg)
 	syncRequestPacket := msg.(*transport.SyncRequestPacket)
 
 	endpoint.OnSyncRequest(syncRequestPacket, syncRequestPacket.PacketSize())
 
-	msgs, ok := connection.SendMap[endpoint.PeerAddress+":"+portStr]
+	msgs, ok := connection.SendMap[endpoint.PeerHandle]
 	if ok != true {
 		t.Errorf("The message was not sent. ")
 	}
@@ -217,7 +210,7 @@ func TestUDPProtocolOnSyncRequest(t *testing.T) {
 	}
 }
 
-func TestUDPProtocolGetPeerConnectStatus(t *testing.T) {
+func TestProtocolGetPeerConnectStatus(t *testing.T) {
 	_, endpoint := MakeEndpoint()
 	var frame int32
 	want := true
@@ -235,29 +228,29 @@ func TestUDPProtocolGetPeerConnectStatus(t *testing.T) {
 
 }
 
-func TestUDPProtocolHandlesMessage(t *testing.T) {
+func TestProtocolHandlesMessage(t *testing.T) {
 	_, endpoint := MakeEndpoint()
 
 	want := true
-	got := endpoint.HandlesMsg(testPeerAddress, testPeerPort)
+	got := endpoint.HandlesMsg(testPeerHandle)
 
 	if want != got {
 		t.Errorf("expected '%t' but got '%t'", want, got)
 	}
 }
 
-func TestUDPProtocolHandlesMessageFalse(t *testing.T) {
+func TestProtocolHandlesMessageFalse(t *testing.T) {
 	_, endpoint := MakeEndpoint()
 
 	want := false
-	got := endpoint.HandlesMsg("1.2.3.4", 0)
+	got := endpoint.HandlesMsg(0)
 
 	if want != got {
 		t.Errorf("expected '%t' but got '%t'", want, got)
 	}
 }
 
-func TestUDPProtocolSetLocalFrameNumber(t *testing.T) {
+func TestProtocolSetLocalFrameNumber(t *testing.T) {
 	_, endpoint := MakeEndpoint()
 
 	endpoint.SetLocalFrameNumber(8)
@@ -269,7 +262,7 @@ func TestUDPProtocolSetLocalFrameNumber(t *testing.T) {
 	}
 }
 
-func TestUDPProtocolOnQualityReply(t *testing.T) {
+func TestProtocolOnQualityReply(t *testing.T) {
 	_, endpoint := MakeEndpoint()
 	msg := transport.NewMessage(transport.QualityReplyMsg)
 	qualityReplyPacket := msg.(*transport.QualityReplyPacket)
@@ -286,9 +279,9 @@ func TestUDPProtocolOnQualityReply(t *testing.T) {
 	}
 }
 
-func TestUDPProtocolQueEventPanic(t *testing.T) {
+func TestProtocolQueEventPanic(t *testing.T) {
 	_, endpoint := MakeEndpoint()
-	event := protocol.UdpProtocolEvent{}
+	event := protocol.ProtocolEvent{}
 	capcity := 64
 	defer func() {
 		if r := recover(); r == nil {
@@ -300,7 +293,7 @@ func TestUDPProtocolQueEventPanic(t *testing.T) {
 	}
 }
 
-func TestUDPProtocolGetEventError(t *testing.T) {
+func TestProtocolGetEventError(t *testing.T) {
 	_, endpoint := MakeEndpoint()
 	_, err := endpoint.GetEvent()
 	if err == nil {
@@ -308,9 +301,9 @@ func TestUDPProtocolGetEventError(t *testing.T) {
 	}
 }
 
-func TestUDPProtocolGetEvent(t *testing.T) {
+func TestProtocolGetEvent(t *testing.T) {
 	_, endpoint := MakeEndpoint()
-	want := protocol.UdpProtocolEvent{}
+	want := protocol.ProtocolEvent{}
 	endpoint.QueueEvent(&want)
 	got, _ := endpoint.GetEvent()
 	if want.String() != got.String() {
@@ -318,7 +311,7 @@ func TestUDPProtocolGetEvent(t *testing.T) {
 	}
 }
 
-func TestUDPProtocolSyncchronize(t *testing.T) {
+func TestProtocolSyncchronize(t *testing.T) {
 	connection, endpoint := MakeEndpoint()
 	synchronizeEndpoint(connection, &endpoint)
 
@@ -348,7 +341,7 @@ func TestUDPProtocolSyncchronize(t *testing.T) {
 
 }
 
-func TestUDPProtocolOnLoopPoll(t *testing.T) {
+func TestProtocolOnLoopPoll(t *testing.T) {
 	connection, endpoint := MakeEndpoint()
 	synchronizeAndDrainEvents(connection, &endpoint)
 
@@ -359,13 +352,13 @@ func TestUDPProtocolOnLoopPoll(t *testing.T) {
 
 }
 
-func TestUDPProtocolHeartbeatGameInput(t *testing.T) {
+func TestProtocolHeartbeatGameInput(t *testing.T) {
 	connection, endpoint := MakeEndpoint()
 	synchronizeAndDrainEvents(connection, &endpoint)
 	triggerHeartbeatInput(t, connection, &endpoint)
 }
 
-func TestUDPProtocolOnInputDefaultPanic(t *testing.T) {
+func TestProtocolOnInputDefaultPanic(t *testing.T) {
 	connection, endpoint := MakeEndpoint()
 	synchronizeAndDrainEvents(connection, &endpoint)
 	triggerHeartbeatInput(t, connection, &endpoint)
@@ -380,7 +373,7 @@ func TestUDPProtocolOnInputDefaultPanic(t *testing.T) {
 	endpoint.OnInput(inputPacket, inputPacket.PacketSize())
 }
 
-func TestUDPProtocolOnInputPanicWithNonEqualConnectStatus(t *testing.T) {
+func TestProtocolOnInputPanicWithNonEqualConnectStatus(t *testing.T) {
 	connectStatus := defaultConnectStatus()
 	connection, endpoint := MakeEndpointWithStatus(connectStatus)
 	synchronizeAndDrainEvents(connection, &endpoint)
@@ -397,7 +390,7 @@ func TestUDPProtocolOnInputPanicWithNonEqualConnectStatus(t *testing.T) {
 	endpoint.OnInput(inputPacket, inputPacket.PacketSize())
 }
 
-func TestUDPProtocolOnInputAfterSynchronizeCharacterization(t *testing.T) {
+func TestProtocolOnInputAfterSynchronizeCharacterization(t *testing.T) {
 	connection, endpoint := MakeEndpoint()
 	synchronizeAndDrainEvents(connection, &endpoint)
 	triggerHeartbeatInput(t, connection, &endpoint)
@@ -414,7 +407,7 @@ func TestUDPProtocolOnInputAfterSynchronizeCharacterization(t *testing.T) {
 	endpoint.OnInput(inputPacket, inputPacket.PacketSize())
 }
 
-func TestUDPProtocolOnInputAfterSynchronize(t *testing.T) {
+func TestProtocolOnInputAfterSynchronize(t *testing.T) {
 	connection, endpoint := MakeEndpoint()
 	synchronizeAndDrainEvents(connection, &endpoint)
 	triggerHeartbeatInput(t, connection, &endpoint)
@@ -434,7 +427,7 @@ func TestUDPProtocolOnInputAfterSynchronize(t *testing.T) {
 	}
 }
 
-func TestUDPProtocolFakeP2PandMessageHandler(t *testing.T) {
+func TestProtocolFakeP2PandMessageHandler(t *testing.T) {
 	_, endpoint, _, endpoint2 := MakeTwoEndpoints(defaultConnectStatus())
 
 	advance := func() int64 {
@@ -453,7 +446,7 @@ func TestUDPProtocolFakeP2PandMessageHandler(t *testing.T) {
 	}
 }
 
-func TestUDPProtocolDiscconect(t *testing.T) {
+func TestProtocolDiscconect(t *testing.T) {
 	_, endpoint := MakeEndpoint()
 	endpoint.Disconnect()
 	if endpoint.IsRunning() {
@@ -461,7 +454,7 @@ func TestUDPProtocolDiscconect(t *testing.T) {
 	}
 }
 
-func TestUDPProtocolDiscconectOnLoopPoll(t *testing.T) {
+func TestProtocolDiscconectOnLoopPoll(t *testing.T) {
 	_, endpoint := MakeEndpoint()
 	endpoint.Disconnect()
 	advance := func() int64 {
@@ -474,7 +467,7 @@ func TestUDPProtocolDiscconectOnLoopPoll(t *testing.T) {
 	}
 }
 
-func TestUDPProtocolOnInputDisconnectedRequest(t *testing.T) {
+func TestProtocolOnInputDisconnectedRequest(t *testing.T) {
 	_, endpoint := MakeEndpointWithStatus(fourConnectStatus())
 	msg := transport.NewMessage(transport.InputMsg)
 	inputPacket := msg.(*transport.InputPacket)
@@ -486,15 +479,15 @@ func TestUDPProtocolOnInputDisconnectedRequest(t *testing.T) {
 	}
 }
 
-func TestUDPProtocolIsInitalized(t *testing.T) {
+func TestProtocolIsInitalized(t *testing.T) {
 	connectStatus := defaultConnectStatus()
-	endpoint := protocol.NewUdpProtocol(nil, 0, testPeerAddress, testPeerPort, &connectStatus)
+	endpoint := protocol.NewProtocol(nil, 0, testPeerHandle, &connectStatus)
 	if endpoint.IsInitialized() {
 		t.Errorf("The endpoint should not be initialized if connection is nil.")
 	}
 }
 
-func TestUDPProtocolOnInvalid(t *testing.T) {
+func TestProtocolOnInvalid(t *testing.T) {
 	_, endpoint := MakeEndpoint()
 	invalidMessageType := 88
 	msg := transport.NewMessage(transport.MessageType(invalidMessageType))
@@ -508,7 +501,7 @@ func TestUDPProtocolOnInvalid(t *testing.T) {
 	}
 }
 
-func TestUDPProtocolSendPendingOutputDefault(t *testing.T) {
+func TestProtocolSendPendingOutputDefault(t *testing.T) {
 	connection, endpoint := MakeEndpoint()
 	endpoint.SendPendingOutput()
 	msg := connection.LastSentMessage
@@ -521,7 +514,7 @@ func TestUDPProtocolSendPendingOutputDefault(t *testing.T) {
 	}
 }
 
-func TestUDPProtocolSequenceNumberReject(t *testing.T) {
+func TestProtocolSequenceNumberReject(t *testing.T) {
 	connection, endpoint := MakeEndpoint()
 	msg := transport.NewMessage(transport.QualityReportMsg)
 	msg.SetHeader(0, protocol.MaxSeqDistance+1)
@@ -531,7 +524,7 @@ func TestUDPProtocolSequenceNumberReject(t *testing.T) {
 	}
 }
 
-func TestUDPProtocolKeepAlive(t *testing.T) {
+func TestProtocolKeepAlive(t *testing.T) {
 	connection, endpoint, _, endpoint2 := MakeTwoEndpoints(defaultConnectStatus())
 
 	advance := func() int64 {
@@ -548,7 +541,7 @@ func TestUDPProtocolKeepAlive(t *testing.T) {
 	}
 }
 
-func TestUDPProtocolHeartBeatCharacterization(t *testing.T) {
+func TestProtocolHeartBeatCharacterization(t *testing.T) {
 	_, _, _, endpoint2 := MakeTwoEndpoints(defaultConnectStatus())
 
 	advance := func() int64 {
@@ -569,7 +562,7 @@ func TestUDPProtocolHeartBeatCharacterization(t *testing.T) {
 	}
 }
 
-func TestUDPProtocolHeartBeat(t *testing.T) {
+func TestProtocolHeartBeat(t *testing.T) {
 	connection, endpoint, connection2, endpoint2 := MakeTwoEndpoints(fourConnectStatus())
 
 	advance := func() int64 {

@@ -10,7 +10,7 @@ import (
 )
 
 // Transport must satisfy the connection contract the protocol layer expects.
-var _ transport.Connection = (*Transport)(nil)
+var _ transport.Transport = (*Transport)(nil)
 
 // fakeChannel is a message-oriented io.ReadWriteCloser standing in for a
 // detached WebRTC data channel: each Write becomes exactly one Read.
@@ -62,10 +62,10 @@ func syncRequest(random uint32) transport.Message {
 func TestSendToRoutesToRegisteredPeer(t *testing.T) {
 	tr := NewTransport()
 	a, b := newFakeChannel(), newFakeChannel()
-	tr.AddPeer("1.1.1.1", 1, a)
-	tr.AddPeer("2.2.2.2", 2, b)
+	tr.AddPeer(1, a)
+	tr.AddPeer(2, b)
 
-	tr.SendTo(syncRequest(42), "1.1.1.1", 1)
+	tr.SendTo(syncRequest(42), 1)
 
 	select {
 	case raw := <-a.out:
@@ -91,9 +91,9 @@ func TestSendToRoutesToRegisteredPeer(t *testing.T) {
 func TestSendToUnknownPeerIsDropped(t *testing.T) {
 	tr := NewTransport()
 	a := newFakeChannel()
-	tr.AddPeer("1.1.1.1", 1, a)
+	tr.AddPeer(1, a)
 
-	tr.SendTo(syncRequest(1), "9.9.9.9", 9) // no such peer
+	tr.SendTo(syncRequest(1), 9) // no such peer
 
 	select {
 	case <-a.out:
@@ -105,7 +105,7 @@ func TestSendToUnknownPeerIsDropped(t *testing.T) {
 func TestReadDecodesInboundTaggedWithPeer(t *testing.T) {
 	tr := NewTransport()
 	a := newFakeChannel()
-	tr.AddPeer("1.1.1.1", 1, a)
+	tr.AddPeer(1, a)
 
 	msgChan := make(chan transport.MessageChannelItem, 1)
 	go tr.Read(msgChan)
@@ -115,8 +115,8 @@ func TestReadDecodesInboundTaggedWithPeer(t *testing.T) {
 
 	select {
 	case item := <-msgChan:
-		if item.Peer.Ip != "1.1.1.1" || item.Peer.Port != 1 {
-			t.Errorf("peer = %+v, want {1.1.1.1 1}", item.Peer)
+		if item.Player != 1 {
+			t.Errorf("player = %d, want 1", item.Player)
 		}
 		got, ok := item.Message.(*transport.SyncRequestPacket)
 		if !ok || got.RandomRequest != 7 {
@@ -137,13 +137,13 @@ func TestReadStartsForPeersAddedAfterRead(t *testing.T) {
 	defer tr.Close()
 
 	a := newFakeChannel()
-	tr.AddPeer("3.3.3.3", 3, a)
+	tr.AddPeer(3, a)
 	a.in <- syncRequest(9).ToBytes()
 
 	select {
 	case item := <-msgChan:
-		if item.Peer.Port != 3 {
-			t.Errorf("peer port = %d, want 3", item.Peer.Port)
+		if item.Player != 3 {
+			t.Errorf("player = %d, want 3", item.Player)
 		}
 	case <-time.After(time.Second):
 		t.Fatal("late-registered peer was never read")
@@ -153,7 +153,7 @@ func TestReadStartsForPeersAddedAfterRead(t *testing.T) {
 func TestCloseUnblocksReadAndClosesChannels(t *testing.T) {
 	tr := NewTransport()
 	a := newFakeChannel()
-	tr.AddPeer("1.1.1.1", 1, a)
+	tr.AddPeer(1, a)
 
 	done := make(chan struct{})
 	go func() {

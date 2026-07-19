@@ -15,8 +15,9 @@ import (
 )
 
 const (
-	// UDPHeaderSize is the size of the IP + UDP headers.
-	UDPHeaderSize          = 28
+	// PacketHeaderSize is the assumed per-packet transport overhead (IP + UDP
+	// headers), used only for bandwidth estimates.
+	PacketHeaderSize       = 28
 	NumSyncPackets         = 5
 	SyncRetryInterval      = 2000
 	SyncFirstRetryInterval = 500
@@ -24,18 +25,17 @@ const (
 	KeepAliveInterval      = 200
 	QualityReportInterval  = 1000
 	NetworkStatsInterval   = 1000
-	UDPShutdownTimer       = 5000
+	ShutdownTimer          = 5000
 	MaxSeqDistance         = 1 << 15
 )
 
-type UdpProtocol struct {
-	stats UdpProtocolStats // may not need these
-	event UdpProtocolEvent //
+type Protocol struct {
+	stats ProtocolStats // may not need these
+	event ProtocolEvent //
 
 	// Network transmission information
-	Connection        transport.Connection
-	PeerAddress       string
-	PeerPort          int
+	Transport         transport.Transport
+	PeerHandle        transport.PlayerHandle
 	magicNumber       uint16
 	queue             int
 	remoteMagicNumber uint16
@@ -55,8 +55,8 @@ type UdpProtocol struct {
 	// The State Machine
 	localConnectStatus *[]transport.ConnectStatus
 	peerConnectStatus  []transport.ConnectStatus
-	currentState       UdpProtocolState
-	state              UdpProtocolStateInfo
+	currentState       ProtocolState
+	state              ProtocolStateInfo
 
 	// Fairness
 	localFrameAdvantage  float32
@@ -82,7 +82,7 @@ type UdpProtocol struct {
 	timesync sync.TimeSync
 
 	// Event Queue
-	eventQueue buffer.RingBuffer[UdpProtocolEvent]
+	eventQueue buffer.RingBuffer[ProtocolEvent]
 
 	RemoteChecksumsThisFrame util.OrderedMap[int, uint32]
 	RemoteChecksums          util.OrderedMap[int, uint32]
@@ -106,28 +106,28 @@ type NetworkTimeSyncStats struct {
 	AvgRemoteFramesBehind float32
 }
 
-type UdpProtocolStats struct {
+type ProtocolStats struct {
 	ping                int
 	remoteFrameAdvtange int
 	localFrameAdvantage int
 	sendQueueLen        int
-	udp                 transport.Stats
+	transport           transport.Stats
 }
 
-type UdpProtocolEvent struct {
-	eventType         UdpProtocolEventType
+type ProtocolEvent struct {
+	eventType         ProtocolEventType
 	Input             input.GameInput // for Input message
 	Total             int             // for synchronizing
 	Count             int             //
 	DisconnectTimeout int             // network interrupted
 }
 
-func (upe UdpProtocolEvent) Type() UdpProtocolEventType {
+func (upe ProtocolEvent) Type() ProtocolEventType {
 	return upe.eventType
 }
 
 // for logging purposes only
-func (upe UdpProtocolEvent) String() string {
+func (upe ProtocolEvent) String() string {
 	str := "(event:"
 	switch upe.eventType {
 	case UnknownEvent:
@@ -159,10 +159,10 @@ func (upe UdpProtocolEvent) String() string {
 	return str
 }
 
-type UdpProtocolEventType int
+type ProtocolEventType int
 
 const (
-	UnknownEvent UdpProtocolEventType = iota - 1
+	UnknownEvent ProtocolEventType = iota - 1
 	ConnectedEvent
 	SynchronizingEvent
 	SynchronziedEvent
@@ -172,16 +172,16 @@ const (
 	NetworkResumedEvent
 )
 
-type UdpProtocolState int
+type ProtocolState int
 
 const (
-	SyncingState UdpProtocolState = iota
+	SyncingState ProtocolState = iota
 	SynchronziedState
 	RunningState
 	DisconnectedState
 )
 
-type UdpProtocolStateInfo struct {
+type ProtocolStateInfo struct {
 	roundTripRemaining uint32 // sync
 	random             uint32
 
@@ -192,31 +192,26 @@ type UdpProtocolStateInfo struct {
 
 type QueueEntry struct {
 	queueTime int64
-	destIp    string
 	msg       transport.Message
-	destPort  int
 }
 
 func (q QueueEntry) String() string {
-	return fmt.Sprintf("Entry : queueTime %d destIp %s msg %s", q.queueTime, q.destIp, q.msg)
+	return fmt.Sprintf("Entry : queueTime %d msg %s", q.queueTime, q.msg)
 }
 
-func NewQueEntry(time int64, destIp string, destPort int, m transport.Message) QueueEntry {
+func NewQueEntry(time int64, m transport.Message) QueueEntry {
 	return QueueEntry{
 		queueTime: time,
-		destIp:    destIp,
-		destPort:  destPort,
 		msg:       m,
 	}
 }
 
 type OoPacket struct {
 	sendTime int64
-	destIp   string
 	msg      transport.Message
 }
 
-func NewUdpProtocol(connection transport.Connection, queue int, ip string, port int, status *[]transport.ConnectStatus) UdpProtocol {
+func NewProtocol(t transport.Transport, queue int, peerHandle transport.PlayerHandle, status *[]transport.ConnectStatus) Protocol {
 	var magicNumber uint16
 	for {
 		magicNumber = uint16(rand.Int())
@@ -232,17 +227,16 @@ func NewUdpProtocol(connection transport.Connection, queue int, ip string, port 
 	lastRecievedInput, _ := input.NewGameInput(-1, nil, 1)
 	lastAckedInput, _ := input.NewGameInput(-1, nil, 1)
 
-	protocol := UdpProtocol{
-		Connection:               connection,
+	protocol := Protocol{
+		Transport:                t,
 		queue:                    queue,
 		localConnectStatus:       status,
 		peerConnectStatus:        peerConnectStatus,
-		PeerAddress:              ip,
-		PeerPort:                 port,
+		PeerHandle:               peerHandle,
 		magicNumber:              magicNumber,
 		pendingOutput:            buffer.NewRingBuffer[input.GameInput](64),
 		sendQueue:                buffer.NewRingBuffer[QueueEntry](64),
-		eventQueue:               buffer.NewRingBuffer[UdpProtocolEvent](64),
+		eventQueue:               buffer.NewRingBuffer[ProtocolEvent](64),
 		timesync:                 sync.NewTimeSync(),
 		lastSentInput:            lastSentInput,
 		lastRecievedInput:        lastRecievedInput,
@@ -254,43 +248,40 @@ func NewUdpProtocol(connection transport.Connection, queue int, ip string, port 
 	return protocol
 }
 
-func (u *UdpProtocol) StartPollLoop() {
+func (u *Protocol) StartPollLoop() {
 	u.RemoteChecksumsThisFrame.Clear()
 }
 
-func (u *UdpProtocol) EndPollLoop() {
+func (u *Protocol) EndPollLoop() {
 	if u.RemoteChecksumsThisFrame.Len() > 0 {
 		highestFrameNum := u.RemoteChecksumsThisFrame.Greatest()
 		u.RemoteChecksums.Set(highestFrameNum.Key, highestFrameNum.Value)
 	}
 }
 
-func (u *UdpProtocol) SetIncomingRemoteChecksum(frame int, checksum uint32) {
+func (u *Protocol) SetIncomingRemoteChecksum(frame int, checksum uint32) {
 	u.RemoteChecksumsThisFrame.Set(frame, checksum)
 }
 
-func (u *UdpProtocol) SetFrameDelay(delay int) {
+func (u *Protocol) SetFrameDelay(delay int) {
 	u.timesync.SetFrameDelay(delay)
 }
 
-func (u *UdpProtocol) RemoteFrameDelay() int {
+func (u *Protocol) RemoteFrameDelay() int {
 	return u.timesync.RemoteFrameDelay
 }
 
-func (u *UdpProtocol) OnLoopPoll(timeFunc polling.FuncTimeType) bool {
+func (u *Protocol) OnLoopPoll(timeFunc polling.FuncTimeType) bool {
 
 	// originally was if !udp
-	if u.Connection == nil {
+	if u.Transport == nil {
 		return true
 	}
 	now := timeFunc()
 
 	var nextInterval int64
 
-	err := u.PumpSendQueue()
-	if err != nil {
-		panic(err)
-	}
+	u.PumpSendQueue()
 
 	switch u.currentState {
 	case SyncingState:
@@ -339,7 +330,7 @@ func (u *UdpProtocol) OnLoopPoll(timeFunc polling.FuncTimeType) bool {
 		if u.disconnectTimeout > 0 && u.disconnectNotifyStart > 0 &&
 			!u.disconnectNotifySent && (u.lastRecvTime+u.disconnectNotifyStart < now) {
 			util.Log.Printf("Endpoint has stopped receiving packets for %d ms.  Sending notification.\n", u.disconnectNotifyStart)
-			e := UdpProtocolEvent{
+			e := ProtocolEvent{
 				eventType: NetworkInterruptedEvent}
 			e.DisconnectTimeout = int(u.disconnectTimeout) - int(u.disconnectNotifyStart)
 			u.QueueEvent(&e)
@@ -350,7 +341,7 @@ func (u *UdpProtocol) OnLoopPoll(timeFunc polling.FuncTimeType) bool {
 			if !u.disconnectEventSent {
 				util.Log.Printf("Endpoint has stopped receiving packets for %d ms.  Disconnecting.\n",
 					u.disconnectTimeout)
-				u.QueueEvent(&UdpProtocolEvent{
+				u.QueueEvent(&ProtocolEvent{
 					eventType: DisconnectedEvent})
 				u.disconnectEventSent = true
 			}
@@ -358,8 +349,8 @@ func (u *UdpProtocol) OnLoopPoll(timeFunc polling.FuncTimeType) bool {
 		break
 	case DisconnectedState:
 		if u.shutdownTimeout < now {
-			util.Log.Printf("Shutting down udp connection.\n")
-			u.Connection = nil
+			util.Log.Printf("Shutting down connection.\n")
+			u.Transport = nil
 			u.shutdownTimeout = 0
 		}
 	}
@@ -370,7 +361,7 @@ func (u *UdpProtocol) OnLoopPoll(timeFunc polling.FuncTimeType) bool {
 // was incode input as bits, etc
 // go globs can do a lot of that for us, so i've forgone much of that logic
 // https://github.com/pond3r/ggpo/blob/7ddadef8546a7d99ff0b3530c6056bc8ee4b9c0a/src/lib/ggpo/network/udp_proto.cpp#L111
-func (u *UdpProtocol) SendPendingOutput() error {
+func (u *Protocol) SendPendingOutput() error {
 	msg := transport.NewMessage(transport.InputMsg)
 	inputMsg := msg.(*transport.InputPacket)
 
@@ -387,7 +378,7 @@ func (u *UdpProtocol) SendPendingOutput() error {
 		inputMsg.InputSize = uint8(input.Size)
 
 		if !(last.Frame == -1 || last.Frame+1 == int(inputMsg.StartFrame)) {
-			return errors.New("ggpo UdpProtocol SendPendingOutput: !((last.Frame == -1 || last.Frame+1 == int(msg.Input.StartFrame))) ")
+			return errors.New("ggpo Protocol SendPendingOutput: !((last.Frame == -1 || last.Frame+1 == int(msg.Input.StartFrame))) ")
 		}
 
 		for j = 0; j < u.pendingOutput.Size(); j++ {
@@ -421,23 +412,23 @@ func (u *UdpProtocol) SendPendingOutput() error {
 
 	// may not even need this.
 	if offset >= transport.MaxCompressedBits {
-		return errors.New("ggpo UdpProtocol SendPendingOutput: offset >= MaxCompressedBits")
+		return errors.New("ggpo Protocol SendPendingOutput: offset >= MaxCompressedBits")
 	}
 
 	u.SendMsg(inputMsg)
 	return nil
 }
 
-func (u *UdpProtocol) SendInputAck() {
+func (u *Protocol) SendInputAck() {
 	msg := transport.NewMessage(transport.InputAckMsg)
 	inputAck := msg.(*transport.InputAckPacket)
 	inputAck.AckFrame = int32(u.lastRecievedInput.Frame)
 	u.SendMsg(inputAck)
 }
 
-func (u *UdpProtocol) GetEvent() (*UdpProtocolEvent, error) {
+func (u *Protocol) GetEvent() (*ProtocolEvent, error) {
 	if u.eventQueue.Size() == 0 {
-		return nil, errors.New("ggpo UdpProtocol GetEvent:no events")
+		return nil, errors.New("ggpo Protocol GetEvent:no events")
 	}
 	e, err := u.eventQueue.Front()
 	if err != nil {
@@ -450,7 +441,7 @@ func (u *UdpProtocol) GetEvent() (*UdpProtocolEvent, error) {
 	return &e, nil
 }
 
-func (u *UdpProtocol) QueueEvent(evt *UdpProtocolEvent) {
+func (u *Protocol) QueueEvent(evt *ProtocolEvent) {
 	util.Log.Printf("Queueing event %s", *evt)
 	err := u.eventQueue.Push(*evt)
 	// if there's no more room left in the queue, make room.
@@ -461,12 +452,12 @@ func (u *UdpProtocol) QueueEvent(evt *UdpProtocolEvent) {
 	}
 }
 
-func (u *UdpProtocol) Disconnect() {
+func (u *Protocol) Disconnect() {
 	u.currentState = DisconnectedState
-	u.shutdownTimeout = time.Now().UnixMilli() + UDPShutdownTimer
+	u.shutdownTimeout = time.Now().UnixMilli() + ShutdownTimer
 }
 
-func (u *UdpProtocol) SendSyncRequest() {
+func (u *Protocol) SendSyncRequest() {
 	u.state.random = uint32(rand.Int() & 0xFFFF)
 	msg := transport.NewMessage(transport.SyncRequestMsg)
 	syncRequest := msg.(*transport.SyncRequestPacket)
@@ -475,30 +466,23 @@ func (u *UdpProtocol) SendSyncRequest() {
 	u.SendMsg(syncRequest)
 }
 
-func (u *UdpProtocol) SendMsg(msg transport.Message) {
-	util.Log.Printf("In UdpProtocol send %s", msg)
+func (u *Protocol) SendMsg(msg transport.Message) {
+	util.Log.Printf("In Protocol send %s", msg)
 	u.packetsSent++
 	u.lastSendTime = time.Now().UnixMilli()
 	u.bytesSent += msg.PacketSize()
 	msg.SetHeader(u.magicNumber, u.nextSendSeq)
 	u.nextSendSeq++
-	if u.PeerAddress == "" {
-		panic("peerAdress empty, why?")
-	}
-	var err error
-	err = u.sendQueue.Push(NewQueEntry(
-		time.Now().UnixMilli(), u.PeerAddress, u.PeerPort, msg))
+	err := u.sendQueue.Push(NewQueEntry(
+		time.Now().UnixMilli(), msg))
 	if err != nil {
 		panic(err)
 	}
 
-	err = u.PumpSendQueue()
-	if err != nil {
-		panic(err)
-	}
+	u.PumpSendQueue()
 }
 
-func (u *UdpProtocol) OnInput(msg transport.Message, length int) (bool, error) {
+func (u *Protocol) OnInput(msg transport.Message, length int) (bool, error) {
 	inputMessage := msg.(*transport.InputPacket)
 
 	// If a disconnect is requested, go ahead and disconnect now.
@@ -506,7 +490,7 @@ func (u *UdpProtocol) OnInput(msg transport.Message, length int) (bool, error) {
 	if disconnectRequested {
 		if u.currentState != DisconnectedState && !u.disconnectEventSent {
 			util.Log.Printf("Disconnecting endpoint on remote request.\n")
-			u.QueueEvent(&UdpProtocolEvent{
+			u.QueueEvent(&ProtocolEvent{
 				eventType: DisconnectedEvent,
 			})
 			u.disconnectEventSent = true
@@ -517,7 +501,7 @@ func (u *UdpProtocol) OnInput(msg transport.Message, length int) (bool, error) {
 		remoteStatus := inputMessage.PeerConnectStatus
 		for i := 0; i < len(u.peerConnectStatus); i++ {
 			if remoteStatus[i].LastFrame < u.peerConnectStatus[i].LastFrame {
-				return false, errors.New("ggpo UdpProtocol OnInput: remoteStatus[i].LastFrame < u.peerConnectStatus[i].LastFrame")
+				return false, errors.New("ggpo Protocol OnInput: remoteStatus[i].LastFrame < u.peerConnectStatus[i].LastFrame")
 			}
 			u.peerConnectStatus[i].Disconnected = u.peerConnectStatus[i].Disconnected || remoteStatus[i].Disconnected
 			u.peerConnectStatus[i].LastFrame = util.Max(u.peerConnectStatus[i].LastFrame, remoteStatus[i].LastFrame)
@@ -538,17 +522,17 @@ func (u *UdpProtocol) OnInput(msg transport.Message, length int) (bool, error) {
 
 	for offset < len(inputMessage.Bits) {
 		if currentFrame > uint32(u.lastRecievedInput.Frame+1) {
-			return false, errors.New("ggpo UdpProtocol OnInput: currentFrame > uint32(u.lastRecievedInput.Frame + 1)")
+			return false, errors.New("ggpo Protocol OnInput: currentFrame > uint32(u.lastRecievedInput.Frame + 1)")
 		}
 		useInputs := currentFrame == uint32(u.lastRecievedInput.Frame+1)
 		if useInputs {
 			if currentFrame != uint32(u.lastRecievedInput.Frame)+1 {
-				return false, errors.New("ggpo UdpProtocol OnInput: currentFrame != uint32(u.lastRecievedInput.Frame) +1")
+				return false, errors.New("ggpo Protocol OnInput: currentFrame != uint32(u.lastRecievedInput.Frame) +1")
 			}
 			u.lastRecievedInput.Bits = inputMessage.Bits[offset : offset+int(inputMessage.InputSize)]
 			u.lastRecievedInput.Frame = int(currentFrame)
 			u.lastRecievedInput.Checksum = inputMessage.Checksum
-			evt := UdpProtocolEvent{
+			evt := ProtocolEvent{
 				eventType: InputEvent,
 				Input:     u.lastRecievedInput,
 			}
@@ -565,7 +549,7 @@ func (u *UdpProtocol) OnInput(msg transport.Message, length int) (bool, error) {
 	}
 
 	if u.lastRecievedInput.Frame < lastRecievedFrameNumber {
-		return false, errors.New("ggpo UdpProtocol OnInput: u.lastRecievedInput.Frame < lastRecievedFrameNumber")
+		return false, errors.New("ggpo Protocol OnInput: u.lastRecievedInput.Frame < lastRecievedFrameNumber")
 	}
 
 	// Get rid of our buffered input
@@ -588,7 +572,7 @@ func (u *UdpProtocol) OnInput(msg transport.Message, length int) (bool, error) {
 	return true, nil
 }
 
-func (u *UdpProtocol) OnInputAck(msg transport.Message, len int) (bool, error) {
+func (u *Protocol) OnInputAck(msg transport.Message, len int) (bool, error) {
 	inputAck := msg.(*transport.InputAckPacket)
 	// Get rid of our buffered input
 	for u.pendingOutput.Size() > 0 {
@@ -610,7 +594,7 @@ func (u *UdpProtocol) OnInputAck(msg transport.Message, len int) (bool, error) {
 	return true, nil
 }
 
-func (u *UdpProtocol) OnQualityReport(msg transport.Message, len int) (bool, error) {
+func (u *Protocol) OnQualityReport(msg transport.Message, len int) (bool, error) {
 	qualityReport := msg.(*transport.QualityReportPacket)
 	reply := transport.NewMessage(transport.QualityReplyMsg)
 	replyPacket := reply.(*transport.QualityReplyPacket)
@@ -621,17 +605,17 @@ func (u *UdpProtocol) OnQualityReport(msg transport.Message, len int) (bool, err
 	return true, nil
 }
 
-func (u *UdpProtocol) OnQualityReply(msg transport.Message, len int) (bool, error) {
+func (u *Protocol) OnQualityReply(msg transport.Message, len int) (bool, error) {
 	qualityReply := msg.(*transport.QualityReplyPacket)
 	u.roundTripTime = time.Now().UnixMilli() - int64(qualityReply.Pong)
 	return true, nil
 }
 
-func (u *UdpProtocol) OnKeepAlive(msg transport.Message, len int) (bool, error) {
+func (u *Protocol) OnKeepAlive(msg transport.Message, len int) (bool, error) {
 	return true, nil
 }
 
-func (u *UdpProtocol) GetNetworkStats() NetworkStats {
+func (u *Protocol) GetNetworkStats() NetworkStats {
 	s := NetworkStats{}
 	s.Network.Ping = u.roundTripTime
 	s.Network.SendQueueLen = u.pendingOutput.Size()
@@ -643,24 +627,24 @@ func (u *UdpProtocol) GetNetworkStats() NetworkStats {
 	return s
 }
 
-func (u *UdpProtocol) SetLocalFrameNumber(localFrame int) {
+func (u *Protocol) SetLocalFrameNumber(localFrame int) {
 	remoteFrame := float32(int64(u.lastRecievedInput.Frame) + (u.roundTripTime * 60.0 / 2000.0))
 	u.localFrameAdvantage = ((remoteFrame - float32(localFrame)) - float32(u.timesync.FrameDelay2))
 }
 
-func (u *UdpProtocol) RecommendFrameDelay() float32 {
+func (u *Protocol) RecommendFrameDelay() float32 {
 	return u.timesync.ReccomendFrameWaitDuration(false)
 }
 
-func (u *UdpProtocol) SetDisconnectTimeout(timeout int) {
+func (u *Protocol) SetDisconnectTimeout(timeout int) {
 	u.disconnectTimeout = int64(timeout)
 }
 
-func (u *UdpProtocol) SetDisconnectNotifyStart(timeout int) {
+func (u *Protocol) SetDisconnectNotifyStart(timeout int) {
 	u.disconnectNotifyStart = int64(timeout)
 }
 
-func (u *UdpProtocol) PumpSendQueue() error {
+func (u *Protocol) PumpSendQueue() {
 	var entry QueueEntry
 	var err error
 
@@ -682,12 +666,8 @@ func (u *UdpProtocol) PumpSendQueue() error {
 				entry.msg.Header().SequenceNumber, delay)
 			u.ooPacket.sendTime = time.Now().UnixMilli() + delay
 			u.ooPacket.msg = entry.msg
-			u.ooPacket.destIp = entry.destIp
 		} else {
-			if entry.destIp == "" {
-				return errors.New("ggpo UdpProtocol PumpSendQueue: entry.destIp == \"\"")
-			}
-			u.Connection.SendTo(entry.msg, entry.destIp, entry.destPort)
+			u.Transport.SendTo(entry.msg, u.PeerHandle)
 			// would delete the udpmsg here
 		}
 		err := u.sendQueue.Pop()
@@ -697,13 +677,12 @@ func (u *UdpProtocol) PumpSendQueue() error {
 	}
 	if u.ooPacket.msg != nil && u.ooPacket.sendTime < time.Now().UnixMilli() {
 		util.Log.Printf("sending rogue oop!")
-		u.Connection.SendTo(u.ooPacket.msg, u.PeerAddress, u.PeerPort)
+		u.Transport.SendTo(u.ooPacket.msg, u.PeerHandle)
 		u.ooPacket.msg = nil
 	}
-	return nil
 }
 
-func (u *UdpProtocol) ClearSendQueue() {
+func (u *Protocol) ClearSendQueue() {
 	for !u.sendQueue.Empty() {
 		// i'd manually delete the QueueEntry in a language where I could
 		err := u.sendQueue.Pop()
@@ -714,22 +693,22 @@ func (u *UdpProtocol) ClearSendQueue() {
 }
 
 // going to call deletes close
-func (u *UdpProtocol) Close() {
+func (u *Protocol) Close() {
 	u.ClearSendQueue()
-	if u.Connection != nil {
-		u.Connection.Close()
+	if u.Transport != nil {
+		u.Transport.Close()
 	}
 }
 
-func (u *UdpProtocol) HandlesMsg(ipAddress string, port int) bool {
-	if u.Connection == nil {
+func (u *Protocol) HandlesMsg(player transport.PlayerHandle) bool {
+	if u.Transport == nil {
 		return false
 	}
-	return u.PeerAddress == ipAddress && u.PeerPort == port
+	return u.PeerHandle == player
 }
 
-func (u *UdpProtocol) SendInput(input *input.GameInput) {
-	if u.Connection != nil {
+func (u *Protocol) SendInput(input *input.GameInput) {
+	if u.Transport != nil {
 		if u.currentState == RunningState {
 			// check to see if this is a good time to adjust for the rift
 			u.timesync.AdvanceFrames(input, u.localFrameAdvantage, u.remoteFrameAdvantage)
@@ -750,48 +729,48 @@ func (u *UdpProtocol) SendInput(input *input.GameInput) {
 	}
 }
 
-func (u *UdpProtocol) UpdateNetworkStats() {
+func (u *Protocol) UpdateNetworkStats() {
 	now := time.Now().UnixMilli()
 	if u.statsStartTime == 0 {
 		u.statsStartTime = now
 	}
 
-	totalBytesSent := u.bytesSent + (UDPHeaderSize * u.packetsSent)
+	totalBytesSent := u.bytesSent + (PacketHeaderSize * u.packetsSent)
 	seconds := float64(now-u.statsStartTime) / 1000.0
 	bps := float64(totalBytesSent) / seconds
-	udpOverhead := float64(100.0 * (float64(UDPHeaderSize * u.packetsSent)) / float64(u.bytesSent))
+	headerOverhead := float64(100.0 * (float64(PacketHeaderSize * u.packetsSent)) / float64(u.bytesSent))
 	u.kbpsSent = int(bps / 1024)
 
-	util.Log.Printf("Network Stats -- Bandwidth: %.2f KBps Packets Sent: %5d (%.2f pps) KB Sent: %.2f UDP Overhead: %.2f %%.\n",
+	util.Log.Printf("Network Stats -- Bandwidth: %.2f KBps Packets Sent: %5d (%.2f pps) KB Sent: %.2f Header Overhead: %.2f %%.\n",
 		float64(u.kbpsSent),
 		u.packetsSent,
 		float64(u.packetsSent*1000)/float64(now-u.statsStartTime),
 		float64(totalBytesSent/1024.0),
-		udpOverhead)
+		headerOverhead)
 }
 
-func (u *UdpProtocol) Synchronize() {
-	if u.Connection != nil {
+func (u *Protocol) Synchronize() {
+	if u.Transport != nil {
 		u.currentState = SyncingState
 		u.state.roundTripRemaining = uint32(NumSyncPackets)
 		u.SendSyncRequest()
 	}
 }
 
-func (u *UdpProtocol) GetPeerConnectStatus(id int, frame *int32) bool {
+func (u *Protocol) GetPeerConnectStatus(id int, frame *int32) bool {
 	*frame = u.peerConnectStatus[id].LastFrame
 	// !u.peerConnectStatus[id].Disconnected from the C/++ world
 	return !u.peerConnectStatus[id].Disconnected
 }
 
-func (u *UdpProtocol) OnInvalid(msg transport.Message, len int) (bool, error) {
-	//  Assert(false) // ? ASSERT(FALSE && "Invalid msg in UdpProtocol");
+func (u *Protocol) OnInvalid(msg transport.Message, len int) (bool, error) {
+	//  Assert(false) // ? ASSERT(FALSE && "Invalid msg in Protocol");
 	// ah
-	util.Log.Printf("Invalid msg in UdpProtocol ")
-	return false, errors.New("ggpo UdpProtocol OnInvalid: invalid msg in UdpProtocol")
+	util.Log.Printf("Invalid msg in Protocol ")
+	return false, errors.New("ggpo Protocol OnInvalid: invalid msg in Protocol")
 }
 
-func (u *UdpProtocol) OnSyncRequest(msg transport.Message, len int) (bool, error) {
+func (u *Protocol) OnSyncRequest(msg transport.Message, len int) (bool, error) {
 	request := msg.(*transport.SyncRequestPacket)
 	reply := transport.NewMessage(transport.SyncReplyMsg)
 	syncReply := reply.(*transport.SyncReplyPacket)
@@ -801,12 +780,12 @@ func (u *UdpProtocol) OnSyncRequest(msg transport.Message, len int) (bool, error
 	return true, nil
 }
 
-func (u *UdpProtocol) OnMsg(msg transport.Message, length int) {
+func (u *Protocol) OnMsg(msg transport.Message, length int) {
 	handled := false
 	var err error
-	type UdpProtocolDispatchFunc func(msg transport.Message, length int) (bool, error)
+	type ProtocolDispatchFunc func(msg transport.Message, length int) (bool, error)
 
-	table := []UdpProtocolDispatchFunc{
+	table := []ProtocolDispatchFunc{
 		u.OnInvalid,
 		u.OnSyncRequest,
 		u.OnSyncReply,
@@ -847,7 +826,7 @@ func (u *UdpProtocol) OnMsg(msg transport.Message, length int) {
 		u.lastRecvTime = time.Now().UnixMilli()
 		if u.disconnectNotifySent && u.currentState == RunningState {
 			u.QueueEvent(
-				&UdpProtocolEvent{
+				&ProtocolEvent{
 					eventType: NetworkResumedEvent,
 				})
 			u.disconnectNotifySent = false
@@ -855,7 +834,7 @@ func (u *UdpProtocol) OnMsg(msg transport.Message, length int) {
 	}
 }
 
-func (u *UdpProtocol) OnSyncReply(msg transport.Message, length int) (bool, error) {
+func (u *Protocol) OnSyncReply(msg transport.Message, length int) (bool, error) {
 	syncReply := msg.(*transport.SyncReplyPacket)
 	if u.currentState != SyncingState {
 		util.Log.Println("Ignoring SyncReply while not synching.")
@@ -869,7 +848,7 @@ func (u *UdpProtocol) OnSyncReply(msg transport.Message, length int) (bool, erro
 	}
 
 	if !u.connected {
-		u.QueueEvent(&UdpProtocolEvent{
+		u.QueueEvent(&ProtocolEvent{
 			eventType: ConnectedEvent})
 		u.connected = true
 	}
@@ -878,14 +857,14 @@ func (u *UdpProtocol) OnSyncReply(msg transport.Message, length int) (bool, erro
 	u.state.roundTripRemaining--
 	if u.state.roundTripRemaining == 0 {
 		util.Log.Printf("Synchronized!\n")
-		u.QueueEvent(&UdpProtocolEvent{
+		u.QueueEvent(&ProtocolEvent{
 			eventType: SynchronziedEvent,
 		})
 		u.currentState = RunningState
 		u.lastRecievedInput.Frame = -1
 		u.remoteMagicNumber = msg.Header().Magic
 	} else {
-		evt := UdpProtocolEvent{
+		evt := ProtocolEvent{
 			eventType: SynchronizingEvent,
 		}
 		evt.Total = NumSyncPackets
@@ -897,14 +876,14 @@ func (u *UdpProtocol) OnSyncReply(msg transport.Message, length int) (bool, erro
 	return true, nil
 }
 
-func (u *UdpProtocol) IsInitialized() bool {
-	return u.Connection != nil
+func (u *Protocol) IsInitialized() bool {
+	return u.Transport != nil
 }
 
-func (u *UdpProtocol) IsSynchronized() bool {
+func (u *Protocol) IsSynchronized() bool {
 	return u.currentState == RunningState
 }
 
-func (u *UdpProtocol) IsRunning() bool {
+func (u *Protocol) IsRunning() bool {
 	return u.currentState == RunningState
 }

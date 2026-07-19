@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/ikemen-engine/ggpo/signaling"
+	"github.com/ikemen-engine/ggpo/transport"
 	"github.com/pion/webrtc/v4"
 )
 
@@ -66,9 +67,9 @@ func (d *Dialer) HostLobby(ctx context.Context) (*Lobby, error) {
 
 // Accept waits for the next player to join the lobby, performs the
 // offer/answer exchange with them, and returns the established data channel
-// along with the player ID the signaling server assigned to them. Call it once
-// per expected remote player.
-func (l *Lobby) Accept(ctx context.Context) (io.ReadWriteCloser, int, error) {
+// along with the player handle the signaling server assigned to them. Call it
+// once per expected remote player.
+func (l *Lobby) Accept(ctx context.Context) (io.ReadWriteCloser, transport.PlayerHandle, error) {
 	d := l.dialer
 
 	playerID, err := l.nextUnregisteredPlayer(ctx)
@@ -97,7 +98,7 @@ func (l *Lobby) Accept(ctx context.Context) (io.ReadWriteCloser, int, error) {
 		pc.Close()
 		return nil, 0, err
 	}
-	return channel, playerID, nil
+	return channel, transport.PlayerHandle(playerID), nil
 }
 
 // Delete removes the lobby from the signaling server. Established connections
@@ -109,8 +110,8 @@ func (l *Lobby) Delete(ctx context.Context) error {
 
 // Join joins the lobby with the given ID, performs the offer/answer exchange
 // with the host, and returns the established data channel along with the
-// player ID the signaling server assigned to us.
-func (d *Dialer) Join(ctx context.Context, lobbyID string) (io.ReadWriteCloser, int, error) {
+// player handle the signaling server assigned to us.
+func (d *Dialer) Join(ctx context.Context, lobbyID string) (io.ReadWriteCloser, transport.PlayerHandle, error) {
 	body, err := d.get(ctx, d.SignalingURL+"/lobby/join?id="+lobbyID)
 	if err != nil {
 		return nil, 0, fmt.Errorf("webrtcconn: joining lobby %s: %w", lobbyID, err)
@@ -152,7 +153,7 @@ func (d *Dialer) Join(ctx context.Context, lobbyID string) (io.ReadWriteCloser, 
 		pc.Close()
 		return nil, 0, err
 	}
-	return channel, int(playerID), nil
+	return channel, transport.PlayerHandle(playerID), nil
 }
 
 // completeConnection runs the SDP exchange for one host/client pair and waits
