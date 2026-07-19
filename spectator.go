@@ -185,7 +185,7 @@ func (s *Spectator) OnUdpProtocolEvent(evt *protocol.UdpProtocolEvent) {
 	}
 }
 
-func (s *Spectator) HandleUDPMessage(ipAddress string, port int, msg udp.UDPMessage, len int) {
+func (s *Spectator) HandleMessage(ipAddress string, port int, msg udp.UDPMessage, len int) {
 	if s.host.HandlesMsg(ipAddress, port) {
 		s.host.OnMsg(msg, len)
 	}
@@ -230,7 +230,7 @@ func (s *Spectator) InitializeConnection(c ...udp.Connection) error {
 func (s *Spectator) HandleMessages() {
 	for i := 0; i < len(s.messageChannel); i++ {
 		mi := <-s.messageChannel
-		s.HandleUDPMessage(mi.Peer.Ip, mi.Peer.Port, mi.Message, mi.Length)
+		s.HandleMessage(mi.Peer.Ip, mi.Peer.Port, mi.Message, mi.Length)
 	}
 }
 

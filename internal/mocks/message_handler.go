@@ -9,7 +9,7 @@ type FakeMessageHandler struct {
 	Endpoint *protocol.UdpProtocol
 }
 
-func (f *FakeMessageHandler) HandleUDPMessage(ipAddress string, port int, msg udp.UDPMessage, length int) {
+func (f *FakeMessageHandler) HandleMessage(ipAddress string, port int, msg udp.UDPMessage, length int) {
 	if f.Endpoint.HandlesMsg(ipAddress, port) {
 		f.Endpoint.OnMsg(msg, length)
 	}

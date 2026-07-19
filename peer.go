@@ -750,7 +750,7 @@ Propogates messages to all endpoints and spectators (?)
 As of right now it hands the message off to the first endpoint that
 handles it then returns?
 */
-func (p *Peer) HandleUDPMessage(ipAddress string, port int, msg udp.UDPMessage, length int) {
+func (p *Peer) HandleMessage(ipAddress string, port int, msg udp.UDPMessage, length int) {
 	for i := 0; i < p.numPlayers; i++ {
 		if p.endpoints[i].HandlesMsg(ipAddress, port) {
 			p.endpoints[i].OnMsg(msg, length)
@@ -770,7 +770,7 @@ func (p *Peer) HandleMessages() {
 		select {
 		case mi, ok := <-p.messageChannel:
 			if ok {
-				p.HandleUDPMessage(mi.Peer.Ip, mi.Peer.Port, mi.Message, mi.Length)
+				p.HandleMessage(mi.Peer.Ip, mi.Peer.Port, mi.Message, mi.Length)
 			} else {
 				// The channel was closed, exit the function
 				return

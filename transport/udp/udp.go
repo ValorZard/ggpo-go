@@ -29,15 +29,15 @@ type Stats struct {
 	KbpsSent    float64
 }
 
-func getPeerAddress(address net.Addr) peerAddress {
+func getPeerAddress(address net.Addr) PeerAddress {
 	switch addr := address.(type) {
 	case *net.UDPAddr:
-		return peerAddress{
+		return PeerAddress{
 			Ip:   addr.IP.String(),
 			Port: addr.Port,
 		}
 	}
-	return peerAddress{}
+	return PeerAddress{}
 }
 
 func (u Udp) Close() {
