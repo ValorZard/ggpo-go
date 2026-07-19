@@ -6,11 +6,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ikemen-engine/ggpo"
 	"github.com/ikemen-engine/ggpo/internal/mocks"
 	"github.com/ikemen-engine/ggpo/internal/protocol"
-	"github.com/ikemen-engine/ggpo/transport/udp"
-
-	"github.com/ikemen-engine/ggpo"
+	"github.com/ikemen-engine/ggpo/transport"
 )
 
 func TestNewSpectatorBackendSession(t *testing.T) {
@@ -29,9 +28,9 @@ func TestNewSpectatorBackendSession(t *testing.T) {
 	specPort := 6005
 	stb := ggpo.NewUDPSpectator(&session, specPort, 2, 4, hostIp, localPort)
 
-	connection := mocks.NewFakeMultiplePeerConnection([]udp.MessageHandler{&p2p2, &stb}, localPort, remoteIp)
-	connection2 := mocks.NewFakeMultiplePeerConnection([]udp.MessageHandler{&p2p}, remotePort, remoteIp)
-	connection3 := mocks.NewFakeMultiplePeerConnection([]udp.MessageHandler{&p2p}, specPort, remoteIp)
+	connection := mocks.NewFakeMultiplePeerConnection([]transport.MessageHandler{&p2p2, &stb}, localPort, remoteIp)
+	connection2 := mocks.NewFakeMultiplePeerConnection([]transport.MessageHandler{&p2p}, remotePort, remoteIp)
+	connection3 := mocks.NewFakeMultiplePeerConnection([]transport.MessageHandler{&p2p}, specPort, remoteIp)
 
 	p2p.InitializeConnection(&connection)
 	p2p2.InitializeConnection(&connection2)
@@ -96,9 +95,9 @@ func TestNewSpectatorBackendInput(t *testing.T) {
 	specPort := 6005
 	stb := ggpo.NewUDPSpectator(&session, specPort, 2, 4, hostIp, localPort)
 
-	connection := mocks.NewFakeMultiplePeerConnection([]udp.MessageHandler{&p2p2, &stb}, localPort, remoteIp)
-	connection2 := mocks.NewFakeMultiplePeerConnection([]udp.MessageHandler{&p2p}, remotePort, remoteIp)
-	connection3 := mocks.NewFakeMultiplePeerConnection([]udp.MessageHandler{&p2p}, specPort, remoteIp)
+	connection := mocks.NewFakeMultiplePeerConnection([]transport.MessageHandler{&p2p2, &stb}, localPort, remoteIp)
+	connection2 := mocks.NewFakeMultiplePeerConnection([]transport.MessageHandler{&p2p}, remotePort, remoteIp)
+	connection3 := mocks.NewFakeMultiplePeerConnection([]transport.MessageHandler{&p2p}, specPort, remoteIp)
 
 	p2p.InitializeConnection(&connection)
 	p2p2.InitializeConnection(&connection2)
@@ -193,9 +192,9 @@ func TestNewSpectatorBackendBehind(t *testing.T) {
 	specPort := 6005
 	stb = ggpo.NewUDPSpectator(&session3, specPort, 2, 4, hostIp, localPort)
 
-	connection := mocks.NewFakeMultiplePeerConnection([]udp.MessageHandler{&p2p2, &stb}, localPort, remoteIp)
-	connection2 := mocks.NewFakeMultiplePeerConnection([]udp.MessageHandler{&p2p}, remotePort, remoteIp)
-	connection3 := mocks.NewFakeMultiplePeerConnection([]udp.MessageHandler{&p2p}, specPort, remoteIp)
+	connection := mocks.NewFakeMultiplePeerConnection([]transport.MessageHandler{&p2p2, &stb}, localPort, remoteIp)
+	connection2 := mocks.NewFakeMultiplePeerConnection([]transport.MessageHandler{&p2p}, remotePort, remoteIp)
+	connection3 := mocks.NewFakeMultiplePeerConnection([]transport.MessageHandler{&p2p}, specPort, remoteIp)
 
 	p2p.InitializeConnection(&connection)
 	p2p2.InitializeConnection(&connection2)
@@ -274,9 +273,9 @@ func TestNewSpectatorBackendCharacterization(t *testing.T) {
 	specPort := 6005
 	stb := ggpo.NewUDPSpectator(&session, specPort, 2, 4, hostIp, localPort)
 
-	connection := mocks.NewFakeMultiplePeerConnection([]udp.MessageHandler{&p2p2, &stb}, localPort, remoteIp)
-	connection2 := mocks.NewFakeMultiplePeerConnection([]udp.MessageHandler{&p2p}, remotePort, remoteIp)
-	connection3 := mocks.NewFakeMultiplePeerConnection([]udp.MessageHandler{&p2p}, specPort, remoteIp)
+	connection := mocks.NewFakeMultiplePeerConnection([]transport.MessageHandler{&p2p2, &stb}, localPort, remoteIp)
+	connection2 := mocks.NewFakeMultiplePeerConnection([]transport.MessageHandler{&p2p}, remotePort, remoteIp)
+	connection3 := mocks.NewFakeMultiplePeerConnection([]transport.MessageHandler{&p2p}, specPort, remoteIp)
 
 	p2p.InitializeConnection(&connection)
 	p2p2.InitializeConnection(&connection2)
@@ -364,9 +363,9 @@ func TestNewSpectatorBackendNoInputYet(t *testing.T) {
 	specPort := 6005
 	stb := ggpo.NewUDPSpectator(&session, specPort, 2, 4, hostIp, localPort)
 
-	connection := mocks.NewFakeMultiplePeerConnection([]udp.MessageHandler{&p2p2, &stb}, localPort, remoteIp)
-	connection2 := mocks.NewFakeMultiplePeerConnection([]udp.MessageHandler{&p2p}, remotePort, remoteIp)
-	connection3 := mocks.NewFakeMultiplePeerConnection([]udp.MessageHandler{&p2p}, specPort, remoteIp)
+	connection := mocks.NewFakeMultiplePeerConnection([]transport.MessageHandler{&p2p2, &stb}, localPort, remoteIp)
+	connection2 := mocks.NewFakeMultiplePeerConnection([]transport.MessageHandler{&p2p}, remotePort, remoteIp)
+	connection3 := mocks.NewFakeMultiplePeerConnection([]transport.MessageHandler{&p2p}, specPort, remoteIp)
 
 	p2p.InitializeConnection(&connection)
 	p2p2.InitializeConnection(&connection2)
@@ -426,9 +425,9 @@ func TestNewSpectatorBackendDisconnect(t *testing.T) {
 	specPort := 6005
 	stb := ggpo.NewUDPSpectator(&session, specPort, 2, 4, hostIp, localPort)
 
-	connection := mocks.NewFakeMultiplePeerConnection([]udp.MessageHandler{&p2p2, &stb}, localPort, remoteIp)
-	connection2 := mocks.NewFakeMultiplePeerConnection([]udp.MessageHandler{&p2p}, remotePort, remoteIp)
-	connection3 := mocks.NewFakeMultiplePeerConnection([]udp.MessageHandler{&p2p}, specPort, remoteIp)
+	connection := mocks.NewFakeMultiplePeerConnection([]transport.MessageHandler{&p2p2, &stb}, localPort, remoteIp)
+	connection2 := mocks.NewFakeMultiplePeerConnection([]transport.MessageHandler{&p2p}, remotePort, remoteIp)
+	connection3 := mocks.NewFakeMultiplePeerConnection([]transport.MessageHandler{&p2p}, specPort, remoteIp)
 
 	p2p.InitializeConnection(&connection)
 	p2p2.InitializeConnection(&connection2)
@@ -530,9 +529,9 @@ func TestNoAddingSpectatorAfterSynchronization(t *testing.T) {
 	specPort := 6005
 	stb := ggpo.NewUDPSpectator(&session, specPort, 2, 4, hostIp, localPort)
 
-	connection := mocks.NewFakeMultiplePeerConnection([]udp.MessageHandler{&p2p2, &stb}, localPort, remoteIp)
-	connection2 := mocks.NewFakeMultiplePeerConnection([]udp.MessageHandler{&p2p}, remotePort, remoteIp)
-	connection3 := mocks.NewFakeMultiplePeerConnection([]udp.MessageHandler{&p2p}, specPort, remoteIp)
+	connection := mocks.NewFakeMultiplePeerConnection([]transport.MessageHandler{&p2p2, &stb}, localPort, remoteIp)
+	connection2 := mocks.NewFakeMultiplePeerConnection([]transport.MessageHandler{&p2p}, remotePort, remoteIp)
+	connection3 := mocks.NewFakeMultiplePeerConnection([]transport.MessageHandler{&p2p}, specPort, remoteIp)
 
 	p2p.InitializeConnection(&connection)
 	p2p2.InitializeConnection(&connection2)

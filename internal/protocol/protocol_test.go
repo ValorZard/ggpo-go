@@ -9,7 +9,7 @@ import (
 	"github.com/ikemen-engine/ggpo/internal/mocks"
 	"github.com/ikemen-engine/ggpo/internal/polling"
 	"github.com/ikemen-engine/ggpo/internal/protocol"
-	"github.com/ikemen-engine/ggpo/transport/udp"
+	"github.com/ikemen-engine/ggpo/transport"
 )
 
 const (
@@ -18,15 +18,15 @@ const (
 	testLocalPort   = 7000
 )
 
-func defaultConnectStatus() []udp.UdpConnectStatus {
-	return []udp.UdpConnectStatus{
+func defaultConnectStatus() []transport.ConnectStatus {
+	return []transport.ConnectStatus{
 		{Disconnected: false, LastFrame: 20},
 		{Disconnected: false, LastFrame: 22},
 	}
 }
 
-func fourConnectStatus() []udp.UdpConnectStatus {
-	return []udp.UdpConnectStatus{
+func fourConnectStatus() []transport.ConnectStatus {
+	return []transport.ConnectStatus{
 		{Disconnected: false, LastFrame: 20},
 		{Disconnected: false, LastFrame: 22},
 		{Disconnected: false, LastFrame: 20},
@@ -38,13 +38,13 @@ func MakeEndpoint() (*mocks.FakeConnection, protocol.UdpProtocol) {
 	return MakeEndpointWithStatus(defaultConnectStatus())
 }
 
-func MakeEndpointWithStatus(connectStatus []udp.UdpConnectStatus) (*mocks.FakeConnection, protocol.UdpProtocol) {
+func MakeEndpointWithStatus(connectStatus []transport.ConnectStatus) (*mocks.FakeConnection, protocol.UdpProtocol) {
 	connection := mocks.NewFakeConnection()
 	endpoint := protocol.NewUdpProtocol(&connection, 0, testPeerAddress, testPeerPort, &connectStatus)
 	return &connection, endpoint
 }
 
-func MakeTwoEndpoints(connectStatus []udp.UdpConnectStatus) (*mocks.FakeP2PConnection, *protocol.UdpProtocol, *mocks.FakeP2PConnection, *protocol.UdpProtocol) {
+func MakeTwoEndpoints(connectStatus []transport.ConnectStatus) (*mocks.FakeP2PConnection, *protocol.UdpProtocol, *mocks.FakeP2PConnection, *protocol.UdpProtocol) {
 	f := &mocks.FakeMessageHandler{}
 	f2 := &mocks.FakeMessageHandler{}
 
@@ -67,13 +67,13 @@ func MakeTwoEndpoints(connectStatus []udp.UdpConnectStatus) (*mocks.FakeP2PConne
 // handshake by replaying the required number of sync replies back at it.
 func synchronizeEndpoint(connection *mocks.FakeConnection, endpoint *protocol.UdpProtocol) {
 	endpoint.Synchronize()
-	syncRequest := connection.LastSentMessage.(*udp.SyncRequestPacket)
+	syncRequest := connection.LastSentMessage.(*transport.SyncRequestPacket)
 
-	syncReply := udp.NewUDPMessage(udp.SyncReplyMsg).(*udp.SyncReplyPacket)
+	syncReply := transport.NewMessage(transport.SyncReplyMsg).(*transport.SyncReplyPacket)
 	syncReply.RandomReply = syncRequest.RandomRequest
 	for i := 0; i < protocol.NumSyncPackets; i++ {
 		endpoint.OnSyncReply(syncReply, syncReply.PacketSize())
-		syncRequest = connection.LastSentMessage.(*udp.SyncRequestPacket)
+		syncRequest = connection.LastSentMessage.(*transport.SyncRequestPacket)
 		syncReply.RandomReply = syncRequest.RandomRequest
 	}
 }
@@ -96,7 +96,7 @@ func triggerHeartbeatInput(t *testing.T, connection *mocks.FakeConnection, endpo
 	for i := 0; i < heartbeatTriggerInterval; i++ {
 		endpoint.OnLoopPoll(polling.DefaultTime)
 	}
-	if connection.LastSentMessage.Type() != udp.InputMsg {
+	if connection.LastSentMessage.Type() != transport.InputMsg {
 		t.Errorf("This expected the OnLoopPoll to send a heartbeat game input")
 	}
 }
@@ -123,7 +123,7 @@ func TestUDPProtocolSendInput(t *testing.T) {
 	if ok != true {
 		t.Errorf("The message was never sent. ")
 	}
-	inputPacket := msgs[0].(*udp.InputPacket)
+	inputPacket := msgs[0].(*transport.InputPacket)
 	got := inputPacket.Bits
 	if got != nil {
 		t.Errorf("expected '%#v' but got '%#v'", nil, got)
@@ -158,8 +158,8 @@ func TestUDPProtocolSynchronize(t *testing.T) {
 		t.Errorf("The message was not sent. ")
 	}
 
-	syncPacket := msgs[0].(*udp.SyncRequestPacket)
-	if syncPacket.Header().HeaderType != uint8(udp.SyncRequestMsg) {
+	syncPacket := msgs[0].(*transport.SyncRequestPacket)
+	if syncPacket.Header().HeaderType != uint8(transport.SyncRequestMsg) {
 		t.Errorf("The message that was sent/recieved wsa not a SyncRequestMessage. ")
 	}
 }
@@ -173,8 +173,8 @@ func TestUDPProtocolSendInputAck(t *testing.T) {
 		t.Errorf("The message was not sent. ")
 	}
 
-	inputAckMessage := msgs[0].(*udp.InputAckPacket)
-	if inputAckMessage.Header().HeaderType != uint8(udp.InputAckMsg) {
+	inputAckMessage := msgs[0].(*transport.InputAckPacket)
+	if inputAckMessage.Header().HeaderType != uint8(transport.InputAckMsg) {
 		t.Errorf("The message that was sent/recieved wsa not a SyncRequestMessage. ")
 	}
 }
@@ -182,8 +182,8 @@ func TestUDPProtocolSendInputAck(t *testing.T) {
 func TestUDPProtocolOnQualityReport(t *testing.T) {
 	connection, endpoint := MakeEndpoint()
 	portStr := strconv.Itoa(endpoint.PeerPort)
-	msg := udp.NewUDPMessage(udp.QualityReportMsg)
-	qualityReportPacket := msg.(*udp.QualityReportPacket)
+	msg := transport.NewMessage(transport.QualityReportMsg)
+	qualityReportPacket := msg.(*transport.QualityReportPacket)
 	qualityReportPacket.FrameAdvantage = 6
 	qualityReportPacket.Ping = 50
 	endpoint.OnQualityReport(qualityReportPacket, qualityReportPacket.PacketSize())
@@ -192,8 +192,8 @@ func TestUDPProtocolOnQualityReport(t *testing.T) {
 		t.Errorf("The message was not sent. ")
 	}
 
-	qualityReplyPacket := msgs[0].(*udp.QualityReplyPacket)
-	if qualityReplyPacket.Header().HeaderType != uint8(udp.QualityReplyMsg) {
+	qualityReplyPacket := msgs[0].(*transport.QualityReplyPacket)
+	if qualityReplyPacket.Header().HeaderType != uint8(transport.QualityReplyMsg) {
 		t.Errorf("The message that was sent/recieved wsa not a SyncRequestMessage. ")
 	}
 }
@@ -201,8 +201,8 @@ func TestUDPProtocolOnQualityReport(t *testing.T) {
 func TestUDPProtocolOnSyncRequest(t *testing.T) {
 	connection, endpoint := MakeEndpoint()
 	portStr := strconv.Itoa(endpoint.PeerPort)
-	msg := udp.NewUDPMessage(udp.SyncRequestMsg)
-	syncRequestPacket := msg.(*udp.SyncRequestPacket)
+	msg := transport.NewMessage(transport.SyncRequestMsg)
+	syncRequestPacket := msg.(*transport.SyncRequestPacket)
 
 	endpoint.OnSyncRequest(syncRequestPacket, syncRequestPacket.PacketSize())
 
@@ -211,8 +211,8 @@ func TestUDPProtocolOnSyncRequest(t *testing.T) {
 		t.Errorf("The message was not sent. ")
 	}
 
-	syncReplyPacket := msgs[0].(*udp.SyncReplyPacket)
-	if syncReplyPacket.Header().HeaderType != uint8(udp.SyncReplyMsg) {
+	syncReplyPacket := msgs[0].(*transport.SyncReplyPacket)
+	if syncReplyPacket.Header().HeaderType != uint8(transport.SyncReplyMsg) {
 		t.Errorf("The message that was sent/recieved wsa not a SyncRequestMessage. ")
 	}
 }
@@ -271,8 +271,8 @@ func TestUDPProtocolSetLocalFrameNumber(t *testing.T) {
 
 func TestUDPProtocolOnQualityReply(t *testing.T) {
 	_, endpoint := MakeEndpoint()
-	msg := udp.NewUDPMessage(udp.QualityReplyMsg)
-	qualityReplyPacket := msg.(*udp.QualityReplyPacket)
+	msg := transport.NewMessage(transport.QualityReplyMsg)
+	qualityReplyPacket := msg.(*transport.QualityReplyPacket)
 	qualityReplyPacket.Pong = 0
 	var checkInterval int64 = 60
 	endpoint.OnQualityReply(qualityReplyPacket, qualityReplyPacket.PacketSize())
@@ -353,7 +353,7 @@ func TestUDPProtocolOnLoopPoll(t *testing.T) {
 	synchronizeAndDrainEvents(connection, &endpoint)
 
 	endpoint.OnLoopPoll(polling.DefaultTime)
-	if connection.LastSentMessage.Type() != udp.QualityReportMsg {
+	if connection.LastSentMessage.Type() != transport.QualityReportMsg {
 		t.Errorf("This expected the OnLoopPoll to send a quality report message")
 	}
 
@@ -370,8 +370,8 @@ func TestUDPProtocolOnInputDefaultPanic(t *testing.T) {
 	synchronizeAndDrainEvents(connection, &endpoint)
 	triggerHeartbeatInput(t, connection, &endpoint)
 
-	msg := udp.NewUDPMessage(udp.InputMsg)
-	inputPacket := msg.(*udp.InputPacket)
+	msg := transport.NewMessage(transport.InputMsg)
+	inputPacket := msg.(*transport.InputPacket)
 	defer func() {
 		if r := recover(); r == nil {
 			t.Errorf("The code did not panic when OnInput recieved a completely empty input packet.")
@@ -386,8 +386,8 @@ func TestUDPProtocolOnInputPanicWithNonEqualConnectStatus(t *testing.T) {
 	synchronizeAndDrainEvents(connection, &endpoint)
 	triggerHeartbeatInput(t, connection, &endpoint)
 
-	msg := udp.NewUDPMessage(udp.InputMsg)
-	inputPacket := msg.(*udp.InputPacket)
+	msg := transport.NewMessage(transport.InputMsg)
+	inputPacket := msg.(*transport.InputPacket)
 	inputPacket.PeerConnectStatus = connectStatus
 	defer func() {
 		if r := recover(); r == nil {
@@ -402,9 +402,9 @@ func TestUDPProtocolOnInputAfterSynchronizeCharacterization(t *testing.T) {
 	synchronizeAndDrainEvents(connection, &endpoint)
 	triggerHeartbeatInput(t, connection, &endpoint)
 
-	msg := udp.NewUDPMessage(udp.InputMsg)
-	inputPacket := msg.(*udp.InputPacket)
-	inputPacket.PeerConnectStatus = make([]udp.UdpConnectStatus, 4)
+	msg := transport.NewMessage(transport.InputMsg)
+	inputPacket := msg.(*transport.InputPacket)
+	inputPacket.PeerConnectStatus = make([]transport.ConnectStatus, 4)
 	inputPacket.Bits = []byte{1, 2, 3, 4}
 	defer func() {
 		if r := recover(); r == nil {
@@ -419,9 +419,9 @@ func TestUDPProtocolOnInputAfterSynchronize(t *testing.T) {
 	synchronizeAndDrainEvents(connection, &endpoint)
 	triggerHeartbeatInput(t, connection, &endpoint)
 
-	msg := udp.NewUDPMessage(udp.InputMsg)
-	inputPacket := msg.(*udp.InputPacket)
-	inputPacket.PeerConnectStatus = make([]udp.UdpConnectStatus, 4)
+	msg := transport.NewMessage(transport.InputMsg)
+	inputPacket := msg.(*transport.InputPacket)
+	inputPacket.PeerConnectStatus = make([]transport.ConnectStatus, 4)
 	inputPacket.Bits = []byte{1, 2, 3, 4}
 	inputPacket.InputSize = 4
 	endpoint.OnInput(inputPacket, inputPacket.PacketSize())
@@ -476,8 +476,8 @@ func TestUDPProtocolDiscconectOnLoopPoll(t *testing.T) {
 
 func TestUDPProtocolOnInputDisconnectedRequest(t *testing.T) {
 	_, endpoint := MakeEndpointWithStatus(fourConnectStatus())
-	msg := udp.NewUDPMessage(udp.InputMsg)
-	inputPacket := msg.(*udp.InputPacket)
+	msg := transport.NewMessage(transport.InputMsg)
+	inputPacket := msg.(*transport.InputPacket)
 	inputPacket.DisconectRequested = true
 	endpoint.OnInput(inputPacket, inputPacket.PacketSize())
 	evt, _ := endpoint.GetEvent()
@@ -497,7 +497,7 @@ func TestUDPProtocolIsInitalized(t *testing.T) {
 func TestUDPProtocolOnInvalid(t *testing.T) {
 	_, endpoint := MakeEndpoint()
 	invalidMessageType := 88
-	msg := udp.NewUDPMessage(udp.UDPMessageType(invalidMessageType))
+	msg := transport.NewMessage(transport.MessageType(invalidMessageType))
 	endpoint.OnMsg(msg, msg.PacketSize())
 	handled, err := endpoint.OnInvalid(msg, msg.PacketSize())
 	if handled == true {
@@ -512,7 +512,7 @@ func TestUDPProtocolSendPendingOutputDefault(t *testing.T) {
 	connection, endpoint := MakeEndpoint()
 	endpoint.SendPendingOutput()
 	msg := connection.LastSentMessage
-	inputPacket := msg.(*udp.InputPacket)
+	inputPacket := msg.(*transport.InputPacket)
 	if inputPacket.StartFrame != 0 {
 		t.Errorf("Inputs sent when there's no pending output should have startframe 0 ")
 	}
@@ -523,7 +523,7 @@ func TestUDPProtocolSendPendingOutputDefault(t *testing.T) {
 
 func TestUDPProtocolSequenceNumberReject(t *testing.T) {
 	connection, endpoint := MakeEndpoint()
-	msg := udp.NewUDPMessage(udp.QualityReportMsg)
+	msg := transport.NewMessage(transport.QualityReportMsg)
 	msg.SetHeader(0, protocol.MaxSeqDistance+1)
 	endpoint.OnMsg(msg, msg.PacketSize())
 	if connection.LastSentMessage != nil {
@@ -543,7 +543,7 @@ func TestUDPProtocolKeepAlive(t *testing.T) {
 
 	endpoint.OnLoopPoll(advance)
 	endpoint.OnLoopPoll(advance)
-	if connection.LastSentMessage.Header().HeaderType != uint8(udp.KeepAliveMsg) {
+	if connection.LastSentMessage.Header().HeaderType != uint8(transport.KeepAliveMsg) {
 		t.Errorf("Endpoint should've sent keep alive packet.")
 	}
 }
@@ -587,19 +587,19 @@ func TestUDPProtocolHeartBeat(t *testing.T) {
 	e1i := connection.MessageHistory[len(connection.MessageHistory)-2]
 	e2k := connection2.MessageHistory[len(connection2.MessageHistory)-1]
 	e2i := connection2.MessageHistory[len(connection2.MessageHistory)-2]
-	if e1k.Header().HeaderType != uint8(udp.KeepAliveMsg) {
+	if e1k.Header().HeaderType != uint8(transport.KeepAliveMsg) {
 		t.Errorf("Endpoint 1 should've sent a keep alive msg")
 	}
 
-	if e1i.Header().HeaderType != uint8(udp.InputMsg) {
+	if e1i.Header().HeaderType != uint8(transport.InputMsg) {
 		t.Errorf("Endpoint 1 should've sent a heartbeat input prior to the keep alive message")
 	}
 
-	if e2k.Header().HeaderType != uint8(udp.KeepAliveMsg) {
+	if e2k.Header().HeaderType != uint8(transport.KeepAliveMsg) {
 		t.Errorf("Endpoint 2 should've sent a keep alive msg")
 	}
 
-	if e2i.Header().HeaderType != uint8(udp.InputMsg) {
+	if e2i.Header().HeaderType != uint8(transport.InputMsg) {
 		t.Errorf("Endpoint 2 should've sent a heartbeat input prior to the keep alive message")
 	}
 

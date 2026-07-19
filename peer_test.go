@@ -6,11 +6,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ikemen-engine/ggpo"
 	"github.com/ikemen-engine/ggpo/internal/mocks"
 	"github.com/ikemen-engine/ggpo/internal/protocol"
-	"github.com/ikemen-engine/ggpo/transport/udp"
-
-	"github.com/ikemen-engine/ggpo"
+	"github.com/ikemen-engine/ggpo/transport"
 )
 
 func slice2dEqual(a [][]byte, b [][]byte) bool {
@@ -1169,9 +1168,9 @@ func TestP2PBackendNPlayersSynchronize(t *testing.T) {
 	p3port := 6005
 	p2p3 := ggpo.NewUDPPeer(&session3, p3port, numPlayers, inputSize)
 
-	connection := mocks.NewFakeMultiplePeerConnection([]udp.MessageHandler{&p2p2, &p2p3}, localPort, remoteIp)
-	connection2 := mocks.NewFakeMultiplePeerConnection([]udp.MessageHandler{&p2p, &p2p3}, remotePort, remoteIp)
-	connection3 := mocks.NewFakeMultiplePeerConnection([]udp.MessageHandler{&p2p, &p2p2}, p3port, remoteIp)
+	connection := mocks.NewFakeMultiplePeerConnection([]transport.MessageHandler{&p2p2, &p2p3}, localPort, remoteIp)
+	connection2 := mocks.NewFakeMultiplePeerConnection([]transport.MessageHandler{&p2p, &p2p3}, remotePort, remoteIp)
+	connection3 := mocks.NewFakeMultiplePeerConnection([]transport.MessageHandler{&p2p, &p2p2}, p3port, remoteIp)
 	//ggpo.EnableLogger()
 	p2p.InitializeConnection(&connection)
 	p2p2.InitializeConnection(&connection2)
@@ -1249,9 +1248,9 @@ func TestP2PBackendNPlayersShareInput(t *testing.T) {
 	p3port := 6005
 	p2p3 := ggpo.NewUDPPeer(&session3, p3port, numPlayers, inputSize)
 
-	connection := mocks.NewFakeMultiplePeerConnection([]udp.MessageHandler{&p2p2, &p2p3}, localPort, remoteIp)
-	connection2 := mocks.NewFakeMultiplePeerConnection([]udp.MessageHandler{&p2p, &p2p3}, remotePort, remoteIp)
-	connection3 := mocks.NewFakeMultiplePeerConnection([]udp.MessageHandler{&p2p, &p2p2}, p3port, remoteIp)
+	connection := mocks.NewFakeMultiplePeerConnection([]transport.MessageHandler{&p2p2, &p2p3}, localPort, remoteIp)
+	connection2 := mocks.NewFakeMultiplePeerConnection([]transport.MessageHandler{&p2p, &p2p3}, remotePort, remoteIp)
+	connection3 := mocks.NewFakeMultiplePeerConnection([]transport.MessageHandler{&p2p, &p2p2}, p3port, remoteIp)
 	//ggpo.EnableLogger()
 	p2p.InitializeConnection(&connection)
 	p2p2.InitializeConnection(&connection2)
@@ -1356,10 +1355,10 @@ func TestP2PBackend4PlayerSynchronize(t *testing.T) {
 	p4port := 6006
 	p2p4 := ggpo.NewUDPPeer(&session4, p4port, numPlayers, inputSize)
 
-	connection := mocks.NewFakeMultiplePeerConnection([]udp.MessageHandler{&p2p2, &p2p3, &p2p4}, localPort, remoteIp)
-	connection2 := mocks.NewFakeMultiplePeerConnection([]udp.MessageHandler{&p2p, &p2p3, &p2p4}, remotePort, remoteIp)
-	connection3 := mocks.NewFakeMultiplePeerConnection([]udp.MessageHandler{&p2p, &p2p2, &p2p4}, p3port, remoteIp)
-	connection4 := mocks.NewFakeMultiplePeerConnection([]udp.MessageHandler{&p2p, &p2p2, &p2p3}, p4port, remoteIp)
+	connection := mocks.NewFakeMultiplePeerConnection([]transport.MessageHandler{&p2p2, &p2p3, &p2p4}, localPort, remoteIp)
+	connection2 := mocks.NewFakeMultiplePeerConnection([]transport.MessageHandler{&p2p, &p2p3, &p2p4}, remotePort, remoteIp)
+	connection3 := mocks.NewFakeMultiplePeerConnection([]transport.MessageHandler{&p2p, &p2p2, &p2p4}, p3port, remoteIp)
+	connection4 := mocks.NewFakeMultiplePeerConnection([]transport.MessageHandler{&p2p, &p2p2, &p2p3}, p4port, remoteIp)
 	//ggpo.EnableLogger()
 	p2p.InitializeConnection(&connection)
 	p2p2.InitializeConnection(&connection2)
@@ -1470,10 +1469,10 @@ func TestP2PBackend4PlayerShareInput(t *testing.T) {
 	p4port := 6006
 	p2p4 := ggpo.NewUDPPeer(&session4, p4port, numPlayers, inputSize)
 
-	connection := mocks.NewFakeMultiplePeerConnection([]udp.MessageHandler{&p2p2, &p2p3, &p2p4}, localPort, remoteIp)
-	connection2 := mocks.NewFakeMultiplePeerConnection([]udp.MessageHandler{&p2p, &p2p3, &p2p4}, remotePort, remoteIp)
-	connection3 := mocks.NewFakeMultiplePeerConnection([]udp.MessageHandler{&p2p, &p2p2, &p2p4}, p3port, remoteIp)
-	connection4 := mocks.NewFakeMultiplePeerConnection([]udp.MessageHandler{&p2p, &p2p2, &p2p3}, p4port, remoteIp)
+	connection := mocks.NewFakeMultiplePeerConnection([]transport.MessageHandler{&p2p2, &p2p3, &p2p4}, localPort, remoteIp)
+	connection2 := mocks.NewFakeMultiplePeerConnection([]transport.MessageHandler{&p2p, &p2p3, &p2p4}, remotePort, remoteIp)
+	connection3 := mocks.NewFakeMultiplePeerConnection([]transport.MessageHandler{&p2p, &p2p2, &p2p4}, p3port, remoteIp)
+	connection4 := mocks.NewFakeMultiplePeerConnection([]transport.MessageHandler{&p2p, &p2p2, &p2p3}, p4port, remoteIp)
 	//ggpo.EnableLogger()
 	p2p.InitializeConnection(&connection)
 	p2p2.InitializeConnection(&connection2)

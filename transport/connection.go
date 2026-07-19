@@ -34,3 +34,9 @@ type MessageChannelItem struct {
 	Message Message
 	Length  int
 }
+
+type Stats struct {
+	BytesSent   int
+	PacketsSent int
+	KbpsSent    float64
+}

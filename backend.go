@@ -3,7 +3,7 @@ package ggpo
 import (
 	"github.com/ikemen-engine/ggpo/internal/polling"
 	"github.com/ikemen-engine/ggpo/internal/protocol"
-	"github.com/ikemen-engine/ggpo/transport/udp"
+	"github.com/ikemen-engine/ggpo/transport"
 )
 
 /*
@@ -22,5 +22,5 @@ type Backend interface {
 	SetDisconnectNotifyStart(timeout int) error
 	Close() error
 	Start()
-	InitializeConnection(c ...udp.Connection) error
+	InitializeConnection(c ...transport.Connection) error
 }

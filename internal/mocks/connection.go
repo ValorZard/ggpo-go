@@ -4,25 +4,25 @@ import (
 	"fmt"
 	"strconv"
 
-	"github.com/ikemen-engine/ggpo/transport/udp"
+	"github.com/ikemen-engine/ggpo/transport"
 )
 
 type FakeConnection struct {
-	SendMap         map[string][]udp.UDPMessage
-	LastSentMessage udp.UDPMessage
+	SendMap         map[string][]transport.Message
+	LastSentMessage transport.Message
 }
 
 func NewFakeConnection() FakeConnection {
 	return FakeConnection{
-		SendMap: make(map[string][]udp.UDPMessage),
+		SendMap: make(map[string][]transport.Message),
 	}
 }
-func (f *FakeConnection) SendTo(msg udp.UDPMessage, remoteIp string, remotePort int) {
+func (f *FakeConnection) SendTo(msg transport.Message, remoteIp string, remotePort int) {
 	portStr := strconv.Itoa(remotePort)
 	addresssStr := remoteIp + ":" + portStr
 	sendSlice, ok := f.SendMap[addresssStr]
 	if !ok {
-		sendSlice := make([]udp.UDPMessage, 2)
+		sendSlice := make([]transport.Message, 2)
 		f.SendMap[addresssStr] = sendSlice
 	}
 	sendSlice = append(sendSlice, msg)
@@ -30,7 +30,7 @@ func (f *FakeConnection) SendTo(msg udp.UDPMessage, remoteIp string, remotePort 
 	f.LastSentMessage = msg
 }
 
-func (f *FakeConnection) Read(messageChan chan udp.MessageChannelItem) {
+func (f *FakeConnection) Read(messageChan chan transport.MessageChannelItem) {
 
 }
 
@@ -39,16 +39,16 @@ func (f *FakeConnection) Close() {
 }
 
 type FakeP2PConnection struct {
-	remoteHandler   udp.MessageHandler
+	remoteHandler   transport.MessageHandler
 	localPort       int
 	remotePort      int
 	localIP         string
 	printOutput     bool
-	LastSentMessage udp.UDPMessage
-	MessageHistory  []udp.UDPMessage
+	LastSentMessage transport.Message
+	MessageHistory  []transport.Message
 }
 
-func (f *FakeP2PConnection) SendTo(msg udp.UDPMessage, remoteIp string, remotePort int) {
+func (f *FakeP2PConnection) SendTo(msg transport.Message, remoteIp string, remotePort int) {
 	if f.printOutput {
 		fmt.Printf("f.localIP %s f.localPort %d msg %s size %d\n", f.localIP, f.localPort, msg, msg.PacketSize())
 	}
@@ -57,30 +57,30 @@ func (f *FakeP2PConnection) SendTo(msg udp.UDPMessage, remoteIp string, remotePo
 	f.remoteHandler.HandleMessage(f.localIP, f.localPort, msg, msg.PacketSize())
 }
 
-func (f *FakeP2PConnection) Read(messageChan chan udp.MessageChannelItem) {
+func (f *FakeP2PConnection) Read(messageChan chan transport.MessageChannelItem) {
 }
 
 func (f *FakeP2PConnection) Close() {
 
 }
 
-func NewFakeP2PConnection(remoteHandler udp.MessageHandler, localPort int, localIP string) FakeP2PConnection {
+func NewFakeP2PConnection(remoteHandler transport.MessageHandler, localPort int, localIP string) FakeP2PConnection {
 	f := FakeP2PConnection{}
 	f.remoteHandler = remoteHandler
 	f.localPort = localPort
 	f.localIP = localIP
-	f.MessageHistory = make([]udp.UDPMessage, 10)
+	f.MessageHistory = make([]transport.Message, 10)
 	return f
 }
 
 type FakeMultiplePeerConnection struct {
-	remoteHandler []udp.MessageHandler
+	remoteHandler []transport.MessageHandler
 	localPort     int
 	localIP       string
 	printOutput   bool
 }
 
-func (f *FakeMultiplePeerConnection) SendTo(msg udp.UDPMessage, remoteIp string, remotePort int) {
+func (f *FakeMultiplePeerConnection) SendTo(msg transport.Message, remoteIp string, remotePort int) {
 	if f.printOutput {
 		fmt.Printf("f.localIP %s f.localPort %d msg %s size %d\n", f.localIP, f.localPort, msg, msg.PacketSize())
 	}
@@ -89,14 +89,14 @@ func (f *FakeMultiplePeerConnection) SendTo(msg udp.UDPMessage, remoteIp string,
 	}
 }
 
-func (f *FakeMultiplePeerConnection) Read(messageChan chan udp.MessageChannelItem) {
+func (f *FakeMultiplePeerConnection) Read(messageChan chan transport.MessageChannelItem) {
 }
 
 func (f *FakeMultiplePeerConnection) Close() {
 
 }
 
-func NewFakeMultiplePeerConnection(remoteHandler []udp.MessageHandler, localPort int, localIP string) FakeMultiplePeerConnection {
+func NewFakeMultiplePeerConnection(remoteHandler []transport.MessageHandler, localPort int, localIP string) FakeMultiplePeerConnection {
 	f := FakeMultiplePeerConnection{}
 	f.remoteHandler = remoteHandler
 	f.localPort = localPort

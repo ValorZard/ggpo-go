@@ -5,6 +5,7 @@ import (
 	"github.com/ikemen-engine/ggpo/internal/polling"
 	"github.com/ikemen-engine/ggpo/internal/protocol"
 	"github.com/ikemen-engine/ggpo/internal/util"
+	"github.com/ikemen-engine/ggpo/transport"
 	"github.com/ikemen-engine/ggpo/transport/udp"
 )
 
@@ -15,7 +16,7 @@ const DefaultCatchupSpeed int = 1
 type Spectator struct {
 	session         Session
 	poll            polling.Poller
-	connection      udp.Connection
+	connection      transport.Connection
 	host            protocol.UdpProtocol
 	synchonizing    bool
 	inputSize       int
@@ -27,7 +28,7 @@ type Spectator struct {
 	framesBehind    int
 	localPort       int
 	currentFrame    int
-	messageChannel  chan udp.MessageChannelItem
+	messageChannel  chan transport.MessageChannelItem
 }
 
 func NewUDPSpectator(cb Session, localPort int, numPlayers int, inputSize int, hostIp string, hostPort int) Spectator {
@@ -51,7 +52,7 @@ func NewUDPSpectator(cb Session, localPort int, numPlayers int, inputSize int, h
 	s.localPort = localPort
 	var poll polling.Poll = polling.NewPoll()
 	s.poll = &poll
-	s.messageChannel = make(chan udp.MessageChannelItem, 200)
+	s.messageChannel = make(chan transport.MessageChannelItem, 200)
 	//go s.udp.Read()
 	return s
 }
@@ -185,7 +186,7 @@ func (s *Spectator) OnUdpProtocolEvent(evt *protocol.UdpProtocolEvent) {
 	}
 }
 
-func (s *Spectator) HandleMessage(ipAddress string, port int, msg udp.UDPMessage, len int) {
+func (s *Spectator) HandleMessage(ipAddress string, port int, msg transport.Message, len int) {
 	if s.host.HandlesMsg(ipAddress, port) {
 		s.host.OnMsg(msg, len)
 	}
@@ -218,7 +219,7 @@ func (s *Spectator) SetDisconnectNotifyStart(timeout int) error {
 func (s *Spectator) Close() error {
 	return Error{Code: ErrorCodeInvalidRequest, Name: "ErrorCodeInvalidRequest"}
 }
-func (s *Spectator) InitializeConnection(c ...udp.Connection) error {
+func (s *Spectator) InitializeConnection(c ...transport.Connection) error {
 	if len(c) == 0 {
 		s.connection = udp.NewUdp(s, s.localPort)
 		return nil

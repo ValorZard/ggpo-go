@@ -5,6 +5,7 @@ import (
 	"strconv"
 
 	"github.com/ikemen-engine/ggpo/internal/util"
+	"github.com/ikemen-engine/ggpo/transport"
 )
 
 const (
@@ -13,31 +14,25 @@ const (
 )
 
 type Udp struct {
-	Stats Stats // may not need this, may just be a service used by others
+	Stats transport.Stats // may not need this, may just be a service used by others
 
 	socket         net.Conn
-	messageHandler MessageHandler
+	messageHandler transport.MessageHandler
 	listener       net.PacketConn
 	localPort      int
 	ipAddress      string
 	sendChan       chan sendRequest
 }
 
-type Stats struct {
-	BytesSent   int
-	PacketsSent int
-	KbpsSent    float64
-}
-
-func getPeerAddress(address net.Addr) PeerAddress {
+func getPeerAddress(address net.Addr) transport.PeerAddress {
 	switch addr := address.(type) {
 	case *net.UDPAddr:
-		return PeerAddress{
+		return transport.PeerAddress{
 			Ip:   addr.IP.String(),
 			Port: addr.Port,
 		}
 	}
-	return PeerAddress{}
+	return transport.PeerAddress{}
 }
 
 func (u Udp) Close() {
@@ -47,12 +42,12 @@ func (u Udp) Close() {
 }
 
 type sendRequest struct {
-	msg        UDPMessage
+	msg        transport.Message
 	remoteIp   string
 	remotePort int
 }
 
-func NewUdp(messageHandler MessageHandler, localPort int) Udp {
+func NewUdp(messageHandler transport.MessageHandler, localPort int) Udp {
 	u := Udp{}
 
 	u.sendChan = make(chan sendRequest, 256) // Create a buffered channel
@@ -80,7 +75,7 @@ func NewUdp(messageHandler MessageHandler, localPort int) Udp {
 // dst should be sockaddr
 // maybe create Gob encoder and decoder members
 // instead of creating them on each message send
-func (u Udp) SendTo(msg UDPMessage, remoteIp string, remotePort int) {
+func (u Udp) SendTo(msg transport.Message, remoteIp string, remotePort int) {
 	if msg == nil || remoteIp == "" {
 		return
 	}
@@ -91,7 +86,7 @@ func (u Udp) SendTo(msg UDPMessage, remoteIp string, remotePort int) {
 	u.sendChan <- sendRequest{msg: msg, remoteIp: remoteIp, remotePort: remotePort} // Add the request to the channel
 }
 
-func (u Udp) Read(messageChan chan MessageChannelItem) {
+func (u Udp) Read(messageChan chan transport.MessageChannelItem) {
 	defer u.listener.Close()
 	recvBuf := make([]byte, MaxUDPPacketSize*2)
 	for {
@@ -105,12 +100,12 @@ func (u Udp) Read(messageChan chan MessageChannelItem) {
 			util.Log.Printf("recvfrom returned (len:%d  from:%s).\n", len, addr.String())
 			peer := getPeerAddress(addr)
 
-			msg, err := DecodeMessageBinary(recvBuf)
+			msg, err := transport.DecodeMessageBinary(recvBuf)
 			if err != nil {
 				util.Log.Printf("Error decoding message: %s", err)
 				continue
 			}
-			messageChan <- MessageChannelItem{Peer: peer, Message: msg, Length: len}
+			messageChan <- transport.MessageChannelItem{Peer: peer, Message: msg, Length: len}
 		}
 
 	}

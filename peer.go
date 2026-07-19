@@ -9,6 +9,7 @@ import (
 	"github.com/ikemen-engine/ggpo/internal/polling"
 	"github.com/ikemen-engine/ggpo/internal/protocol"
 	"github.com/ikemen-engine/ggpo/internal/util"
+	"github.com/ikemen-engine/ggpo/transport"
 	"github.com/ikemen-engine/ggpo/transport/udp"
 )
 
@@ -23,7 +24,7 @@ type Peer struct {
 	session       Session
 	poll          polling.Poller
 	sync          Sync
-	connection    udp.Connection
+	connection    transport.Connection
 	endpoints     []protocol.UdpProtocol
 	spectators    []protocol.UdpProtocol
 	numSpectators int
@@ -37,14 +38,14 @@ type Peer struct {
 	disconnectTimeout     int
 	disconnectNotifyStart int
 
-	localConnectStatus []udp.UdpConnectStatus
+	localConnectStatus []transport.ConnectStatus
 
 	localPort              int
 	pendingChecksums       util.OrderedMap[int, uint32]
 	confirmedChecksums     util.OrderedMap[int, uint32]
 	confirmedChecksumFrame int
 
-	messageChannel chan udp.MessageChannelItem
+	messageChannel chan transport.MessageChannelItem
 }
 
 func NewUDPPeer(cb Session,
@@ -62,7 +63,7 @@ func NewUDPPeer(cb Session,
 	//p.udp = NewUdp(&p, localPort)
 	p.localPort = localPort
 
-	p.localConnectStatus = make([]udp.UdpConnectStatus, udp.UDPMsgMaxPlayers)
+	p.localConnectStatus = make([]transport.ConnectStatus, transport.MsgMaxPlayers)
 	for i := 0; i < len(p.localConnectStatus); i++ {
 		p.localConnectStatus[i].LastFrame = -1
 	}
@@ -77,11 +78,11 @@ func NewUDPPeer(cb Session,
 	p.spectators = make([]protocol.UdpProtocol, MaxSpectators)
 	p.pendingChecksums = util.NewOrderedMap[int, uint32](16)
 	p.confirmedChecksums = util.NewOrderedMap[int, uint32](16)
-	p.messageChannel = make(chan udp.MessageChannelItem, 256)
+	p.messageChannel = make(chan transport.MessageChannelItem, 256)
 	//messages := make(chan UdpPacket)
 	//p.poll.RegisterLoop(&p.udp, nil )
-	//go p.udp.Read()
-	//go p.udp.ReadMsg(messages)
+	//go p.transport.Read()
+	//go p.transport.ReadMsg(messages)
 	//go p.OnMsg(messages)
 	return p
 }
@@ -750,7 +751,7 @@ Propogates messages to all endpoints and spectators (?)
 As of right now it hands the message off to the first endpoint that
 handles it then returns?
 */
-func (p *Peer) HandleMessage(ipAddress string, port int, msg udp.UDPMessage, length int) {
+func (p *Peer) HandleMessage(ipAddress string, port int, msg transport.Message, length int) {
 	for i := 0; i < p.numPlayers; i++ {
 		if p.endpoints[i].HandlesMsg(ipAddress, port) {
 			p.endpoints[i].OnMsg(msg, length)
@@ -852,7 +853,7 @@ func (p *Peer) CheckDesync() {
 	}
 }
 
-func (p *Peer) InitializeConnection(t ...udp.Connection) error {
+func (p *Peer) InitializeConnection(t ...transport.Connection) error {
 	if len(t) == 0 {
 		p.connection = udp.NewUdp(p, p.localPort)
 		return nil
