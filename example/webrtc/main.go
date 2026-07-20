@@ -24,6 +24,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"io"
 	"log"
 
@@ -43,12 +44,12 @@ type config struct {
 
 const numPlayers = 2
 
-func run(cfg config) {
+func run(cfg config) error {
 	if cfg.lobbyID == "" {
-		cfg.lobbyID = "ggpo-test"
+		return errors.New("Can't have an empty lobby name")
 	}
 	if cfg.signalingURL == "" {
-		cfg.signalingURL = "http://localhost:3000"
+		return errors.New("Can't have an empty signaling server")
 	}
 
 	session := game.NewGameSession()
@@ -94,7 +95,9 @@ func run(cfg config) {
 	game.StartClock()
 	if err := ebiten.RunGame(session.Game()); err != nil {
 		log.Fatal(err)
+		return err
 	}
+	return nil
 }
 
 // connect performs the signaling handshake and returns the established data

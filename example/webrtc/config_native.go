@@ -2,7 +2,10 @@
 
 package main
 
-import "flag"
+import (
+	"flag"
+	"log"
+)
 
 func main() {
 	host := flag.Bool("host", false, "host the lobby (otherwise join it)")
@@ -10,9 +13,13 @@ func main() {
 	signaling := flag.String("signaling", "http://localhost:3000", "signaling server url")
 	flag.Parse()
 
-	run(config{
+	err := run(config{
 		host:         *host,
 		lobbyID:      *lobby,
 		signalingURL: *signaling,
 	})
+
+	if err != nil {
+		log.Fatal(err)
+	}
 }

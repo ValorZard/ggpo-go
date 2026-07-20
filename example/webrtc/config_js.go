@@ -2,13 +2,16 @@
 
 package main
 
-import "syscall/js"
+import (
+	"log"
+	"syscall/js"
+)
 
 // main reads its config from the page URL's query string, so the same wasm
 // build serves both roles:
 //
-//	http://host/?host=1&lobby=test   -> hosts lobby "test"
-//	http://host/?lobby=test          -> joins lobby "test"
+//	http://?host=1&lobby=test&signaling=https://sig.example.com -> hosts lobby "test" with signaling server https://sig.example.com
+//	http://host/?lobby=test&signaling=https://sig.example.com         -> joins lobby "test" with signaling server https://sig.example.com
 //
 // An optional &signaling=<url> overrides the signaling server address.
 func main() {
@@ -24,9 +27,13 @@ func main() {
 	}
 
 	host := get("host")
-	run(config{
+	err := run(config{
 		host:         host == "1" || host == "true" || get("role") == "host",
 		lobbyID:      get("lobby"),
 		signalingURL: get("signaling"),
 	})
+
+	if err != nil {
+		log.Fatal(err)
+	}
 }

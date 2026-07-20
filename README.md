@@ -40,8 +40,10 @@ If you want to run the WASM build, do
 ``go run ./example/webrtc/serve``
 
 and then in two different browser tabs, go to
-tab 1: http://localhost:8080/?host=1&lobby=test
-tab 2: http://localhost:8080/?lobby=test
+tab 1: http://localhost:8080/?host=1&lobby=test&signaling=http://localhost:3000
+tab 2: http://localhost:8080/?lobby=test&signaling=http://localhost:3000
+
+where http://localhost:3000 is the address to your signaling server
 
 They should connect and you can then move around with arrow keys.
 
