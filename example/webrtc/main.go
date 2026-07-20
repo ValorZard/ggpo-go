@@ -40,6 +40,9 @@ type config struct {
 	host         bool
 	lobbyID      string
 	signalingURL string
+	// iceServers lists STUN/TURN server URLs for connectivity across networks.
+	// Empty means host candidates only, which works on a LAN or localhost.
+	iceServers []string
 }
 
 const numPlayers = 2
@@ -105,6 +108,7 @@ func run(cfg config) error {
 func connect(cfg config) io.ReadWriteCloser {
 	ctx := context.Background()
 	dialer := webrtc.NewDialer(cfg.signalingURL)
+	dialer.ICEServers = webrtc.ICEServers(cfg.iceServers)
 
 	if cfg.host {
 		log.Printf("hosting lobby %q, waiting for a player to join...", cfg.lobbyID)

@@ -56,3 +56,13 @@ and then
 `go run ./example/webrtc -lobby test` 
 
 in a separate terminal to connect.
+
+## Test WebRTC backend over network
+running `scripts\package.sh` will give you a ready to use package to run on a cloud linux server.
+Just upload it onto your linux server, and then do
+
+`tar -xzf webrtcserver-linux-amd64.tar.gz`
+
+and then
+
+`./webrtcserver -addr 127.0.0.1:8080 -dir public`

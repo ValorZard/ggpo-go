@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/ikemen-engine/ggpo/signaling"
@@ -46,6 +47,18 @@ func NewDialer(signalingURL string) *Dialer {
 		HTTPClient:   http.DefaultClient,
 		api:          webrtc.NewAPI(webrtc.WithSettingEngine(settings)),
 	}
+}
+
+// ICEServers builds a slice suitable for Dialer.ICEServers from a list of ICE server URLs
+// For now, we only allow STUN, and there is only one URL per server. Blank URLs are skipped.
+func ICEServers(urls []string) []webrtc.ICEServer {
+	servers := make([]webrtc.ICEServer, 0, len(urls))
+	for _, u := range urls {
+		if u = strings.TrimSpace(u); u != "" {
+			servers = append(servers, webrtc.ICEServer{URLs: []string{u}})
+		}
+	}
+	return servers
 }
 
 // Lobby is a hosted lobby on the signaling server.
